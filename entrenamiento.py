@@ -101,7 +101,7 @@ def backpropagation_trianing(inputs, outputs, alpha, function_h_name, function_o
     # 2. Bias initialization
     # Bias is an array of 2 arrays[[bias for the hidden layer], [bias for the output layer]]
     if bias == []:
-        bias = [[random.uniform(-1, -0.5) for _ in range(neurons_hidden_layer)], [random.uniform(-1, -0.5) for _ in range(len(outputs[0]))]]
+        bias = [[0.99 for _ in range(neurons_hidden_layer)], [0.99 for _ in range(len(outputs[0]))]]
 
     # list of Errors by pattern initialized in precision value + 5
     errors_p = [precision + 5] * len(inputs)
@@ -115,59 +115,54 @@ def backpropagation_trianing(inputs, outputs, alpha, function_h_name, function_o
 
         # 0. Epoch counter increment
         epoch += 1
-        print(f"Epoch: {epoch}")
         # Pattern by pattern training
         for p in range(len(inputs)):
             if p == 0:
                 epoch_r = ("***--------------------------------INICIO EPOCA--------------------------------***\n")
-            #epoch_r += (f"Patrón: {p}\n")
+            epoch_r += (f"Patrón: {p}\n")
             # 3. Y calculation for the hidden layer
             y_h = output_hidden_calculation(inputs[p], bias[0], weights_h, neurons_hidden_layer, function_h_name)
-            #epoch_r += (f"y_h (Resultados obtenidos de la capa oculta):\n {y_h}\n")
+            epoch_r += (f"y_h (Resultados obtenidos de la capa oculta):\n {y_h}\n")
 
             # 4. Y calculation for the output layer and partials error calculation for the output layer
             y_o, d_o = output_calculation(outputs[p],bias[1],y_h, weights_o, len(outputs[0]), function_o_name)
-            #epoch_r += (f"y_o (Resultados obtenidos de la capa de salida):\n {y_o}\n")
-            #epoch_r += (f"Errores de salida: {d_o}\n")
+            epoch_r += (f"y_o (Resultados obtenidos de la capa de salida):\n {y_o}\n")
+            epoch_r += (f"Errores de salida: {d_o}\n")
             # 5. Partials Error calculation for the hidden layer
             d_h = hidden_partial_error_calculation(d_o, weights_o, inputs[p], bias[0] ,function_h_name, neurons_hidden_layer)
-            #epoch_r += (f"Errores parciales de la capa oculta:\n {d_h}\n")
+            epoch_r += (f"Errores parciales de la capa oculta:\n {d_h}\n")
 
             # 6. Weights update for the output layer
             weights_o = update_output_weights(weights_o, bias[1] , d_o, y_h, alpha, b, weights_o_history)
-            
-            #epoch_r += (f"Actualización de pesos de la capa de salida:\n {w_o}\n")
+            epoch_r += (f"Actualización de pesos de la capa de salida:\n {weights_o}\n")
 
             # 7. Weights update for the hidden layer
             weights_h = update_hidden_layer_weights(weights_h, bias[0], d_h, inputs[p], alpha, b, weights_h_history, neurons_hidden_layer)
-            #epoch_r += (f"Actualización de pesos de la capa oculta:\n {w_h}\n")
+            epoch_r += (f"Actualización de pesos de la capa oculta:\n {weights_h}\n")
 
             # 8. Cuadratic mean error calculation
-            error_p = sum([d_o[k] ** 2 for k in range(len(d_o))]) / 2
+            error_p = sum([d_o[k] ** 2 for k in range(len(d_o))]) * 1 / 2
             errors_p[p] = error_p
-            #epoch_r += (f"Error cuadrático medio del patron:\n {error_p}\n")
+            epoch_r += (f"Error cuadrático medio del patron:\n {error_p}\n")
 
         # 9. Error total calculation
         error_total = sum(errors_p) / len(inputs)
         errors_by_epoch.append(error_total)
-        #epoch_r += (f"Errores de los patrones: {errors_p}\n")
-        print(f'Error de los patrones: {errors_p}')
-        #epoch_r += (f"Error total: {error_total}\n")
-        #epoch_r += ("***--------------------------------FINAL EPOCA--------------------------------***\n")
+        epoch_r += (f"Errores de los patrones: {errors_p}\n")
+        epoch_r += (f"Error total: {error_total}\n")
+        epoch_r += ("***--------------------------------FINAL EPOCA--------------------------------***\n")
 
         if epoch > max_iterations:
             more_neurons = True
             break
 
         # Register the epoch
-        #print(epoch_r)
         epochs_register.append(epoch_r)
     
     if more_neurons:
         print("Numero maximo de iteraciones alcanzado, se aumentará el número de neuronas en la capa oculta")
         neurons_hidden_layer += 1
-        bias[0].append(random.uniform(-1, -0.5))
-        input()
+        bias[0].append(1)
         weights_json, graph_json = backpropagation_trianing(inputs, outputs, alpha, function_h_name, function_o_name, bias, neurons_hidden_layer, precision, max_iterations)
         return None
     
@@ -182,12 +177,12 @@ def backpropagation_trianing(inputs, outputs, alpha, function_h_name, function_o
         }
 
     graph_json = {
-        "epochs_register": epochs_register,
         "epochs": epoch,
         "errors_by_epoch": errors_by_epoch,
         "weights_h_history": weights_h_history,
         "weights_o_history": weights_o_history,
-        "date_training": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "date_training": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "epochs_register": epochs_register,
     }
 
     return weights_json, graph_json
@@ -304,14 +299,14 @@ def update_output_weights(weights_o, bias, d_o, y_h, alpha, b, weights_history):
         w_k = []
         for j in range(len(y_h) + 1): # +1 for the bias
             # Calculate the momentum
-            momentum = b * (weights_history[-2][k][j] - weights_history[-1][k][j]) if len(weights_history) > 1 else 0
+            # momentum = b * (weights_history[-2][k][j] - weights_history[-1][k][j]) if len(weights_history) > 1 else 0
             
             # If j = 0, the weight is for the bias, then the calculation is using the bias value instead of the y_h value
             if j == 0:
-                w = weights_o[k][j] + (alpha * d_o[k] * bias[k]) + momentum
+                w = weights_o[k][j] + (alpha * d_o[k] * bias[k]) 
             # Otherwise, the calculation is using the y_h value 
             else:
-                w = weights_o[k][j] + (alpha * d_o[k] * y_h[j-1]) + momentum
+                w = weights_o[k][j] + (alpha * d_o[k] * y_h[j-1]) 
 
             w_k.append(w)
         weights.append(w_k)
@@ -328,14 +323,14 @@ def update_hidden_layer_weights(weights_h, bias, d_h, x, alpha, b, weights_histo
         w_j = []
         for i in range(len(x) + 1):
             # Calculate the momentum
-            momentum = b * (weights_history[-2][j][i] - weights_history[-1][j][i]) if len(weights_history) > 1 else 0
+            #momentum = b * (weights_history[-2][j][i] - weights_history[-1][j][i]) if len(weights_history) > 1 else 0
 
             # If i = 0, the weight is for the bias, then the calculation is using the bias value instead of the x value
             if i == 0:
-                w = weights_h[j][i] + (alpha * d_h[j][i] * bias[j]) + momentum
+                w = weights_h[j][i] + (alpha * (sum(d_h[j])/len(d_h[j])) * bias[j]) 
             # Otherwise, the calculation is using the x value 
             else:
-                w = weights_h[j][i] + (alpha * d_h[j][i] * x[i-1]) + momentum
+                w = weights_h[j][i] + (alpha * d_h[j][i] * x[i-1])
 
             w_j.append(w)
 
@@ -347,6 +342,49 @@ def sigmoid(x):
 
 def sigmoid_derivative(x):
     return x * (1 - x)
+
+def aplication_backpropagation(weights_h, weights_o, bias, inputs, function_h_name, function_o_name, neurons):
+    # Select the function to calculate the output
+    function = switch_function_output(function_h_name)
+    function_o = switch_function_output(function_o_name)
+
+    y_output = [] 
+
+    for p in range(len(inputs)):
+        print(f"Patrón {p}")
+
+        x = inputs[p]
+        print(f"Entradas: {x}")
+
+        # List of outputs for the hidden layer
+        y_h = []
+
+        for j in range(neurons):
+            # Calculate the net value
+            net_h = sum([x[i] * weights_h[j][i] for i in range(1, len(x))]) + (bias[0][j] * weights_h[j][0])
+            # Calculate the output value
+            y = function(net_h)
+            y_h.append(y)
+    
+        # List of outputs for the output layer
+        y_out = []
+
+        for k in range(len(outputs[0])):
+            # Calculate the net value
+            net_o = sum([y_h[j-1] * weights_o[k][j] for j in range(1,len(weights_o[k]))])
+            net_o += (bias[1][k] * weights_o[k][0])
+
+            # Calculate the output value
+            y_obtained = function_o(net_o)
+            y_out.append(y_obtained)
+
+        y_output.append(y_out)
+
+        print(f"Salida deseada: {outputs[p]}")
+        print(f"Salida: {y_out}")
+
+    return y_obtained
+
 
 if __name__ == "__main__":
     # Generate the second case data
@@ -360,14 +398,29 @@ if __name__ == "__main__":
         cases_json = json.load(file)
     
     # Get the first case data
-    case_1 = cases_json["case_3"]
+    case_0 = cases_json["case_0"]
 
     # Get the inputs and outputs from the first case
-    inputs = case_1["inputs"]
-    outputs = case_1["outputs"]
+    inputs = case_0["inputs"]
+    outputs = case_0["outputs"]
 
     # Training the neural network
-    weights_json, graph_json = backpropagation_trianing(inputs, outputs, 0.5, "sigmoid", "sigmoid")
+    weights_json, graph_json = backpropagation_trianing(inputs, outputs, alpha=0.2,function_h_name="sigmoid",function_o_name="sigmoid", precision=0.001, max_iterations=25000, neurons_hidden_layer=2)
+
+    # Print the epochs_register
+    for epoch in graph_json["epochs_register"]:
+        print(epoch)
+
+    # Print the number of epochs
+    print(f"Number of epochs: {graph_json['epochs']}")
+
+    # Aplication of the neural network
+    y_obtained = aplication_backpropagation(weights_json["weights_h"],
+                                weights_json["weights_o"], weights_json["bias"], inputs,
+                                  weights_json["function_h_name"], weights_json["function_o_name"],
+                                    weights_json["neurons_hidden_layer"])
+
+
 
     # Save the weights and graph data in the files weights.json and graph.json
     with open(get_resource_path("weights.json"), "w") as file:
