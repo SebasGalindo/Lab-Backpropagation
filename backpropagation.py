@@ -353,7 +353,7 @@ def prueba_backpropagation(entradas, salidas, pesos_h, pesos_o, bias_h, bias_o, 
     print("||----------------------------------------------------------------||")
 
 
-def realizar_caso(casos_json, numero_caso, funcion_h="tanh", funcion_o="tanh"):
+def realizar_caso(casos_json, numero_caso, funcion_h="tanh", funcion_o="tanh", neuronas_h = 2, precision = 0.001, iteraciones_max = 50000, MOMENTUM = False, alpha = 0.2):
     # Obtener el caso de entrenamiento # 0
     caso = casos_json[f"case_{numero_caso}"]
 
@@ -361,8 +361,9 @@ def realizar_caso(casos_json, numero_caso, funcion_h="tanh", funcion_o="tanh"):
     entradas = caso["inputs"]
     salidas = caso["outputs"]
 
+
     # Entrenar la red
-    pesos_h, pesos_o, bias_h, bias_o, neuronas_cnt, grap_json = backpropagation_training(entradas, salidas, alpha=0.2, neuronas_h_cnt = 2, precision=0.001, iteraciones_max=50000, funcion_h_nombre=funcion_h, funcion_o_nombre=funcion_o, MOMENTUM = True)
+    pesos_h, pesos_o, bias_h, bias_o, neuronas_cnt, grap_json = backpropagation_training(entradas, salidas, alpha=alpha, neuronas_h_cnt = neuronas_h, precision= precision, iteraciones_max= iteraciones_max, funcion_h_nombre=funcion_h, funcion_o_nombre=funcion_o, MOMENTUM = MOMENTUM)
 
     # Probar la red
     if pesos_h != None and pesos_o != None and bias_h != None and bias_o != None:
