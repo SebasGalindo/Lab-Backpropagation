@@ -122,8 +122,8 @@ def normalize_data(entradas, salidas):
 
     return entradas_n, salidas_n, maximo_entrada, minimo_entrada, maximo_salida, minimo_salida
 
-def backpropagation_training(train_data = None, epoch_label=None, total_error_label=None, labels_error=None, status_label=None, download_weights_btn = None, download_training_data_btn = None, results_btn = None):
-    from app import update_training_process, changue_status_training
+def backpropagation_training(train_data = None, errors_text = None , status_label=None, download_weights_btn = None, download_training_data_btn = None, results_btn = None, main_window=None):
+    from app import update_errors_ui, changue_status_training
     # Json para guardar los datos del entrenamiento
     global weights_json, graph_json, stop_training
     
@@ -233,7 +233,8 @@ def backpropagation_training(train_data = None, epoch_label=None, total_error_la
                     print("\033[91m#", i, "|E| ", "{:.10f}".format(errores_patrones[i]), "\033[0m")
 
             print("\n-------------------------------------------------")
-            update_training_process(epoca, errores_patrones, error_total, precision, epoch_label, total_error_label, labels_error)
+            main_window.after(0, update_errors_ui, epoca, errores_patrones, error_total, precision, errors_text, main_window , False)    
+
 
         # Empezar el recorrido de los patrones
         for p in range(len(entradas)):
@@ -351,11 +352,13 @@ def backpropagation_training(train_data = None, epoch_label=None, total_error_la
         epoca += 1
 
         if epoca >= iteraciones_max:
-            changue_status_training(status_label, "Límite de épocas alcanzado", "red", download_weights_btn, download_training_data_btn, results_btn)
+            #changue_status_training(status_label, "Límite de épocas alcanzado", "red", download_weights_btn, download_training_data_btn, results_btn)
+            main_window.after(0, changue_status_training, status_label, "Límite de épocas alcanzado", "red", download_weights_btn, download_training_data_btn, results_btn)
             return
 
         if stop_training:
-            changue_status_training(status_label, "Entrenamiento detenido", "red", download_weights_btn, download_training_data_btn, results_btn)
+            #changue_status_training(status_label, "Entrenamiento detenido", "red", download_weights_btn, download_training_data_btn, results_btn)
+            main_window.after(0, changue_status_training, status_label, "Entrenamiento detenido", "red", download_weights_btn, download_training_data_btn, results_btn)
             return
 
 
@@ -366,7 +369,8 @@ def backpropagation_training(train_data = None, epoch_label=None, total_error_la
     bias_o_registro.append(bias_o[:])  
     errores_patrones_registro.append(errores_patrones[:])  
 
-    update_training_process(epoca, errores_patrones, error_total, precision, epoch_label, total_error_label, labels_error)
+    main_window.after(0, update_errors_ui, epoca, errores_patrones, error_total, precision, errors_text, main_window , True)    
+
 
 
     print("||-------------------------------------------------------------------||")
@@ -439,7 +443,6 @@ def backpropagation_training(train_data = None, epoch_label=None, total_error_la
 
     if not stop_training:
         changue_status_training(status_label, "Entrenamiento finalizado", "green", download_weights_btn, download_training_data_btn, results_btn)
-
 
 def test_neural_network(test_data):
     
@@ -552,3 +555,4 @@ def test_neural_network(test_data):
     print("||----------------------------------------------------------------||")
 
     return Y_resultados, errores
+

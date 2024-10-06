@@ -18,8 +18,9 @@ download_weights_btn, download_training_data_btn, results_btn = None, None, None
 data_train_json, data_test_json, weights_test_json = None, None, None
 num_excercise = 0
 
-labels_error = []
-epoch_label, total_error_label = None, None
+data_inputs_text, errors_text, weight_text, results_text = None, None, None, None
+
+title_font, subtitle_font, text_font = None, None, None
 
 def main_windowSetup():
     main_window = ctk.CTk()
@@ -181,7 +182,7 @@ def explanation_frame_creation(master_window, num_excercise):
 
 def GUI_creation():
 
-    global main_window, content_frame
+    global main_window, content_frame, title_font, subtitle_font, text_font
 
     # Build the main window
     main_window = main_windowSetup()
@@ -193,6 +194,10 @@ def GUI_creation():
     ctk.CTkFrame(master=main_window, width=2, fg_color="#0B2310").grid(row=0, column=1, sticky="ns")
 
     content_frame = initial_frame(main_window)
+
+    title_font = ctk.CTkFont("Arial", 24, "bold")
+    subtitle_font = ctk.CTkFont("Arial", 20, "bold")
+    text_font = ctk.CTkFont("Consolas", 18)
 
     # Run the main window
     main_window.mainloop()
@@ -520,49 +525,42 @@ def chargue_data_training(master, status):
     status.configure(text="Cargado", text_color="green")
 
 def create_data_frame(master, data_json, row=7, is_training=True):
-    global  epoch_label, total_error_label, labels_error
-    epoch_label, total_error_label, labels_error = [], [], []
-    data_frame = ctk.CTkScrollableFrame(master=master, corner_radius=8, fg_color="#ffffff", height=400)
-    data_frame.grid(row=row, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
-    data_frame = grid_setup(data_frame)
-
-    # Title of the data
+    global   data_inputs_text, errors_text, title_font, subtitle_font, text_font
+    
+    data_inputs_text = ctk.CTkTextbox(master=master, corner_radius=8 , font=("Consolas", 16), fg_color="#ffffff", wrap="word", width=860, height=300)
+    data_inputs_text.grid(row=row, column=0, sticky="new", columnspan=12, pady=10, padx=10)
+    
+    data_inputs_text.configure(state="normal") 
+    data_inputs_text.delete(1.0, "end")
+    
+    data_inputs_text.tag_config("title", cnf = {"font": title_font}, foreground="#11371a")
+    data_inputs_text.tag_config("subtitle", cnf = {"font": subtitle_font}, foreground="#11371a")
+    data_inputs_text.tag_config("subtitle_2", cnf = {"font": subtitle_font}, foreground="#70600f")
+    data_inputs_text.tag_config("pattern", cnf = {"font": text_font}, foreground="black")
+    
     title_txt = "Datos de Entrenamiento"
-    title = ctk.CTkLabel(master=data_frame, text=title_txt, font=("Arial", 16, "bold"), text_color="#11371a", anchor="center", justify="center")
-    title.grid(row=0, column=0, pady=5, sticky="new", columnspan=12)
+    data_inputs_text.insert("end", f"{title_txt}\n\n", "title")
 
-    # Inputs
     inputs_txt = "Entradas: "
-    inputs_lbl = ctk.CTkLabel(master=data_frame, text=inputs_txt, font=("Arial", 16, "bold"), text_color="#11371a", justify="center", anchor="center")
-    inputs_lbl.grid(row=1, column=0, pady=5, sticky="new", columnspan=6)
-
-    inputs = data_json["inputs"]
-    inputs_txt2 = ""
-    for i in range(len(inputs)):
-        inputs_txt2 += f"Patrón {i+1}: {inputs[i]}\n"
-    inputs_lbl2 = ctk.CTkLabel(master=data_frame, text=inputs_txt2, font=("Consolas", 16), text_color= "black" , justify="center", wraplength=400)
-    inputs_lbl2.grid(row=2, column=0, pady=5, sticky="new", columnspan=6)
-
-    # Outputs
     outputs_txt = "Salidas: "
-    outputs_lbl = ctk.CTkLabel(master=data_frame, text=outputs_txt, font=("Arial", 16, "bold"), text_color="#11371a", justify="center", anchor="center")
-    outputs_lbl.grid(row=1, column=6, pady=5, sticky="new", columnspan=6)
-
+    inputs = data_json["inputs"]
     outputs = data_json["outputs"]
-    outputs_txt2 = ""
-    for i in range(len(outputs)):
-        outputs_txt2 += f"Patrón {i+1}: {outputs[i]}\n"
-    outputs_lbl2 = ctk.CTkLabel(master=data_frame, text=outputs_txt2, font=("Consolas", 16), text_color= "black" , justify="center", wraplength=400)
-    outputs_lbl2.grid(row=2, column=6, pady=5, sticky="new", columnspan=6)
+    for i in range(len(inputs)):
+        data_inputs_text.insert("end", f"Patrón {i+1}: \n", 'subtitle')
+        data_inputs_text.insert("end", f"{inputs_txt}", 'subtitle_2')
+        data_inputs_text.insert("end", f"{inputs[i]}\n", 'pattern')
+        data_inputs_text.insert("end", f"{outputs_txt}", 'subtitle_2')
+        data_inputs_text.insert("end", f"{outputs[i]}\n\n", 'pattern')
 
+    data_inputs_text.configure(state="disabled")
     if is_training:
-        # Create the training data process frame
-        training_process_frame, epoch_label, total_error_label, labels_error = create_training_process_frame(master, len(inputs))
+        # Create the training data process textbox
+        errors_text = create_training_process_frame(master, len(inputs))
 
-    return data_frame
+    return data_inputs_text
 
 def start_training(status, status2, bias_entry, alpha_entry, betha_entry, precision_entry, layer_h_combobox, layer_o_combobox, excercise_number, momentum, hidden_layer_entry, max_epochs_entry):
-    global data_train_json, labels_error, epoch_label, total_error_label, download_weights_btn, download_training_data_btn, results_btn, num_excercise
+    global data_train_json, errors_text ,download_weights_btn, download_training_data_btn, results_btn, num_excercise, main_window
     
     num_excercise = excercise_number
     
@@ -655,75 +653,91 @@ def start_training(status, status2, bias_entry, alpha_entry, betha_entry, precis
     print(json.dumps(train_data, indent=2))
 
     # Start the training process
-    training_thread = threading.Thread(target=backpropagation_training, args=(train_data,epoch_label, total_error_label, labels_error, status2, download_weights_btn, download_training_data_btn, results_btn))
+    training_thread = threading.Thread(target=backpropagation_training, args=(train_data, errors_text, status2, download_weights_btn, download_training_data_btn, results_btn, main_window))
     training_thread.start()
 
     changue_status_training(status2, "Entrenando...", "orange", download_weights_btn, download_training_data_btn, results_btn)
 
-def create_training_process_frame(master, num_patters):
-    global labels_error, epoch_label, total_error_label
+def create_training_process_frame(master, num_patterns, row=9):
+    global errors_text, title_font, subtitle_font, text_font
 
-    training_frame = ctk.CTkFrame(master=master, corner_radius=8, fg_color="#ffffff")
-    training_frame.grid(row=9, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
-    training_frame = grid_setup(training_frame)
+    errors_text = ctk.CTkTextbox(master=master, corner_radius=8, font=("Arial", 16), fg_color="#ffffff", wrap="word", width=860, height= 660, activate_scrollbars=True)
+    errors_text.grid(row=row, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
 
-    # Title of the training process
+    errors_text.configure(state="normal")
+    errors_text.delete(1.0, "end")
+
+    errors_text.tag_config("title", cnf = {"font": title_font}, foreground="#11371a")
+    errors_text.tag_config("subtitle", cnf = {"font": subtitle_font}, foreground="#70600f")
+    errors_text.tag_config("pattern", cnf = {"font": text_font}, foreground="#70600f")
+    errors_text.tag_config("error_high", cnf = {"font": text_font}, foreground="red")
+    errors_text.tag_config("error_low", cnf = {"font": text_font}, foreground="green")
+
     title_txt = "Proceso de Entrenamiento"
-    title = ctk.CTkLabel(master=training_frame, text=title_txt, font=("Arial", 16, "bold"), text_color="#11371a", anchor="center", justify="center")
-    title.grid(row=0, column=0, pady=5, sticky="new", columnspan=12)
+    errors_text.insert("end", f"{title_txt}\n", "title")
 
-    # Label for the epoch
-    epoch_txt = "Época: "
-    epoch_lbl = ctk.CTkLabel(master=training_frame, text=epoch_txt, font=("Arial", 16, "bold"), text_color="#11371a", justify="center", anchor="center")
-    epoch_lbl.grid(row=1, column=0, pady=5, sticky="new", columnspan=2)
+    epoch_txt = "Época: 0"
+    total_error_txt = "Error Total:"
+    
+    errors_text.insert("end", f"{epoch_txt}\t\t\t", "subtitle")
+    errors_text.insert("end", f"{total_error_txt} ", "subtitle")
+    errors_text.insert("end", "∞\n\n", "error_high")
 
-    epoch_label = ctk.CTkLabel(master=training_frame, text="0", font=("Arial", 16), text_color="#11371a", justify="center", anchor="center")
-    epoch_label.grid(row=1, column=2, pady=5, sticky="new", columnspan=2)
+    for i in range(num_patterns):
+        pattern_txt = f"Patrón {i+1} |E|:"
+        error_txt = "∞"
+        if (i + 1) % 3 != 0:
+            errors_text.insert("end", f"{pattern_txt} ", "subtitle")
+            errors_text.insert("end", f"{error_txt}\t\t", "error_high")
+        else:
+            errors_text.insert("end", f"{pattern_txt} ", "subtitle")
+            errors_text.insert("end", f"{error_txt}\n", "error_high")
 
-    # Label for the total error 
+    errors_text.configure(state="disabled")
+    return errors_text
+
+def update_errors_ui(epoch, errores_patrones, total_error, precision, errors_text, main_window, final = False):
+    
+    errors_text.configure(state="normal")
+    errors_text.delete(1.0, "end")
+
+    errors_text.tag_config("title", cnf = {"font": title_font}, foreground="#11371a")
+    errors_text.tag_config("subtitle", cnf = {"font": subtitle_font}, foreground="#70600f")
+    errors_text.tag_config("pattern", cnf = {"font": text_font}, foreground="#70600f")
+    errors_text.tag_config("error_high", cnf = {"font": text_font}, foreground="red")
+    errors_text.tag_config("error_low", cnf = {"font": text_font}, foreground="green")
+
+    title_txt = "Proceso de Entrenamiento"
+    errors_text.insert("end", f"{title_txt}\n\n", "title")
+
+    epoch_txt = "Época: " + str(epoch)
     total_error_txt = "Error Total: "
-    total_error_lbl = ctk.CTkLabel(master=training_frame, text=total_error_txt, font=("Arial", 16, "bold"), text_color="#11371a", justify="center", anchor="center")
-    total_error_lbl.grid(row=1, column=4, pady=5, sticky="new", columnspan=2)
-
-    text_total_error = "∞"
-    total_error_label = ctk.CTkLabel(master=training_frame, text=text_total_error, font=("Arial", 16), text_color="#11371a", justify="center", anchor="center")
-    total_error_label.grid(row=1, column=6, pady=5, sticky="new", columnspan=2)
-
-    # for to put the labels of the error, in the row there are four => Patterns number |E|: Error
-    # if the error is lower than the precision, the text color will be green, else red
-    row = 2
-    col = 0
-    for i in range(num_patters):
-        pattern_txt = f"Patrón {i+1} |E|: "
-        pattern_lbl = ctk.CTkLabel(master=training_frame, text=pattern_txt, font=("Consolas", 16, "bold"), text_color="#11371a", justify="center", anchor="center")
-        pattern_lbl.grid(row=row, column=col, pady=5, sticky="new")
-
-        col += 1
-        # put the error of the pattern with 10 decimals
-        text_error = "∞"
-        pattern_lbl2 = ctk.CTkLabel(master=training_frame, text=text_error, font=("Consolas", 16), text_color="red", justify="center", anchor="center")
-        pattern_lbl2.grid(row=row, column=col, pady=5, sticky="new", columnspan=2)
-
-        labels_error.append(pattern_lbl2)
-
-        col += 2
-
-        if (i+1) % 3 == 0:
-            row += 1
-            col = 0
-
-    return training_frame, epoch_label, total_error_label, labels_error
-
-def update_training_process(epoch, errores_patrones, total_error, precision, epoch_label, total_error_label, labels_error):
-
-    epoch_label.configure(text=str(epoch))
-
-    total_error_label.configure(text=f"{total_error:.10f}")
+    total_error_txt2 = f"{total_error:.10f}\n"
+    
+    errors_text.insert("end", f"{epoch_txt}\t\t\t\t\t", "subtitle")
+    errors_text.insert("end", f"{total_error_txt} ", "subtitle")
+    if total_error <= precision:
+        errors_text.insert("end", f"{total_error_txt2}\n", "error_low")
+    else:
+        errors_text.insert("end", f"{total_error_txt2}\n", "error_high")
 
     for i in range(len(errores_patrones)):
-        text_color = "green" if errores_patrones[i] <= precision else "red"
-        labels_error[i].configure(text=f"{errores_patrones[i]:.10f}", text_color=text_color)
+        color_tag = "error_low" if errores_patrones[i] <= precision else "error_high"
+        pattern_txt = f"Patrón {i+1} |E|:"
+        error_txt = f"{errores_patrones[i]:.10f}"
+        if color_tag == "error_low" and len(errores_patrones) > 200 and not final:
+            continue
+        if errores_patrones[i] <= (precision/2) and not final and len(errores_patrones) > 50:
+            continue
+        if (i + 1) % 3 != 0:
+            errors_text.insert("end", f"{pattern_txt} ", "subtitle")
+            errors_text.insert("end", f"{error_txt}\t\t\t\t", color_tag)
+        else:
+            errors_text.insert("end", f"{pattern_txt} ", "subtitle")
+            errors_text.insert("end", f"{error_txt}\n", color_tag)
 
+    main_window.update_idletasks() 
+    
 def download_weights(num_excercise):
     weights_json =  get_weights_json()
     download_json(filename= f"Resultados_ejercicio_{num_excercise}", data= weights_json)
@@ -735,8 +749,6 @@ def download_training_data(num_excercise):
 def results_frame_creation(master, is_train = True, weights_json = None, test_data = None):
     global data_train_json, num_excercises
     inputs, outputs = None, None
-    
-    print(f"Excersice results frame creation {num_excercise}")
     
     weights_json =  get_weights_json() if weights_json is None else weights_json
     results_frame = ctk.CTkFrame(master=master, corner_radius=8, fg_color="#ffffff")
@@ -781,96 +793,74 @@ def results_frame_creation(master, is_train = True, weights_json = None, test_da
     add_results_info(results_frame, test_data, row, num_excercise)
 
 def add_weights_info(frame, weights_json, row, title_txt):
-    # Title of the results
-    title = ctk.CTkLabel(master=frame, text=title_txt, font=("Arial", 16, "bold"), text_color="#11371a", anchor="center", justify="center")
-    title.grid(row=row, column=0, pady=5, sticky="new", columnspan=12)
-    row += 1
-    # Weights H layer label
-    weights_h_txt = "Pesos de la Capa Oculta (H):"
-    weights_h_lbl = ctk.CTkLabel(master=frame, text=weights_h_txt, font=("Arial", 16, "bold"), text_color="#11371a", justify="center", anchor="center")
-    weights_h_lbl.grid(row=row, column=0, pady=5, sticky="new", columnspan=12)
-    row += 1
-    # For to put the weights of the H layer, Each label will have the weights of a neuron
-    weights_h = weights_json["weights_h"]
-    col = 0
-    colspan = 4
-    for j in range(len(weights_h)):
-        
-        weights_txt = f"J {j+1}:\n "
-        for i in range(len(weights_h[j])):
-            weights_txt += f"W[{j+1}][{i+1}]{weights_h[j][i]:.10f}\n"
-        
-        if (len(weights_h) == 1) or (j == len(weights_h) - 1 and len(weights_h) % 3 == 1):
-            colspan = 12    
-    
-        weights_lbl = ctk.CTkLabel(master=frame, text=weights_txt, font=("Consolas", 16), text_color="#11371a", justify="center", wraplength=840)
-        weights_lbl.grid(row=row, column=col, pady=5, sticky="new", columnspan=colspan)
-        if (j+1) % 3 == 0:
-            col = 0
-            row += 1
-        else:
-            col += 4
-    row += 1
-    # Bias H layer label
-    bias_h_txt = "Bias de la Capa Oculta (H):"
-    bias_h_lbl = ctk.CTkLabel(master=frame, text=bias_h_txt, font=("Arial", 16, "bold"), text_color="#11371a", justify="center", anchor="center")
-    bias_h_lbl.grid(row=row, column=0, pady=5, sticky="new", columnspan=12)
-    row += 1
+    global weight_text, title_font, subtitle_font, text_font
 
-    # For to put the bias of the H layer, Each label will have the bias of a neuron
+    weight_text = ctk.CTkTextbox(master=frame, corner_radius=8, font=("Arial", 16), fg_color="#ffffff", wrap="word", width=860, height=400)
+    weight_text.grid(row=row, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
+    row += 1
+    
+    weight_text.configure(state="normal")
+    weight_text.delete(1.0, "end")
+
+    weight_text.tag_config("title", cnf = {"font": title_font}, foreground="#11371a")
+    weight_text.tag_config("subtitle", cnf = {"font": subtitle_font}, foreground="#70600f")
+    weight_text.tag_config("pattern", cnf = {"font": text_font}, foreground="#70600f")
+    weight_text.tag_config("separator", cnf = {"font": text_font}, foreground="#11371a", justify="center")
+
+    weight_text.insert("end", f"{title_txt}\n\n", "title")
+    weights_h_txt = "Pesos de la Capa Oculta (H):"
+    weight_text.insert("end", f"{weights_h_txt}\n\n", "subtitle")
+
+    weights_h = weights_json["weights_h"]
+    for j in range(len(weights_h)):
+        weights_txt = f"J {j+1}:\n"
+        for i in range(len(weights_h[j])):
+            if (i + 1) % 4 != 0:
+                weights_txt += f" W[{j+1}][{i+1}] {weights_h[j][i]:.10f}"
+            else:
+                weights_txt += f" W[{j+1}][{i+1}] {weights_h[j][i]:.10f}\n"
+        weight_text.insert("end", f"{weights_txt}\n", "pattern")
+
+    separator_txt = "-" * 86
+    weight_text.insert("end", f"{separator_txt}\n", "separator")
+
+    bias_h_txt = "Bias de la Capa Oculta (H):"
+    weight_text.insert("end", f"\n{bias_h_txt}\n\n", "subtitle")
+    
     bias_h = weights_json["bias_h"]
     for i in range(len(bias_h)):
-        bias_txt = f"J {i+1}: {bias_h[i]:.10f}"
-        bias_lbl = ctk.CTkLabel(master=frame, text=bias_txt, font=("Consolas", 16), text_color="#11371a", justify="center", wraplength=840)
-        bias_lbl.grid(row=row, column=0, pady=5, sticky="new", columnspan=12)
-        row += 1
-    
-    # Horizontal separator
-    ctk.CTkFrame(master=frame, corner_radius=0, fg_color="#11371a", height=2).grid(row=row, column=0, pady=5, sticky="nsew", columnspan=12)
-    row += 1
+        bias_txt = f"J {i+1}: {bias_h[i]:.10f}\n"
+        weight_text.insert("end", f"{bias_txt}\n", "pattern")
 
-    # Weights O layer label
+    weight_text.insert("end", f"{separator_txt}\n", "separator")
+
     weights_o_txt = "Pesos de la Capa de Salida (O):"
-    weights_o_lbl = ctk.CTkLabel(master=frame, text=weights_o_txt, font=("Arial", 16, "bold"), text_color="#11371a", justify="center", anchor="center")
-    weights_o_lbl.grid(row=row, column=0, pady=5, sticky="new", columnspan=12)
-    row += 1
+    weight_text.insert("end", f"\n{weights_o_txt}\n\n", "subtitle")
 
-    # For to put the weights of the O layer, Each label will have the weights of a neuron
     weights_o = weights_json["weights_o"]
-    col = 0
-    colspan = 4
     for j in range(len(weights_o)):
-        
         weights_txt = f"K {j+1}:\n"
         for i in range(len(weights_o[j])):
-            weights_txt += f"W[{j+1}][{i+1}]{weights_o[j][i]:.10f}\n"
-            
-        if (len(weights_o) == 1) or (j == len(weights_o) - 1 and len(weights_o) % 3 == 1):
-            colspan = 12  
-            
-        weights_lbl = ctk.CTkLabel(master=frame, text=weights_txt, font=("Consolas", 16), text_color="#11371a", justify="center", wraplength=840)
-        weights_lbl.grid(row=row, column=col, pady=5, sticky="new", columnspan=colspan)
-        if (j+1) % 3 == 0:
-            col = 0
-            row += 1
-        else:
-            col += 4
-    row += 1
-    # Bias O layer label
-    bias_o_txt = "Bias de la Capa de Salida (O):"
-    bias_o_lbl = ctk.CTkLabel(master=frame, text=bias_o_txt, font=("Arial", 16, "bold"), text_color="#11371a", justify="center", anchor="center")
-    bias_o_lbl.grid(row=row, column=0, pady=5, sticky="new", columnspan=12)
-    row += 1
+            if (i + 1) % 4 != 0:
+                weights_txt += f" W[{j+1}][{i+1}] {weights_o[j][i]:.10f}"
+            else:
+                weights_txt += f" W[{j+1}][{i+1}] {weights_o[j][i]:.10f}\n"
+        weight_text.insert("end", f"{weights_txt}\n", "pattern")
 
-    # For to put the bias of the O layer, Each label will have the bias of a neuron
+    weight_text.insert("end", f"{separator_txt}\n", "separator")
+
+    bias_o_txt = "Bias de la Capa de Salida (O):"
+    weight_text.insert("end", f"\n{bias_o_txt}\n\n", "subtitle")
+
     bias_o = weights_json["bias_o"]
     for i in range(len(bias_o)):
-        bias_txt = f"K {i+1}: {bias_o[i]:.10f}"
-        bias_lbl = ctk.CTkLabel(master=frame, text=bias_txt, font=("Consolas", 16), text_color="#11371a", justify="center", wraplength=840)
-        bias_lbl.grid(row=row, column=0, pady=5, sticky="new", columnspan=12)
-        row += 1
-    
+        bias_txt = f"K {i+1}: {bias_o[i]:.10f}\n"
+        weight_text.insert("end", f"{bias_txt}\n", "pattern")
+
+    weight_text.configure(state="disabled")
+
     return row
+
 
 def add_graph_info(frame, graph_json, row):
      # Labels for max_epochs, cuantity neurons, function h name, function o name,
@@ -931,40 +921,43 @@ def add_graph_info(frame, graph_json, row):
     return row
 
 def add_results_info(frame, test_data, row, num_excercise=0):
+    global results_text, title_font, subtitle_font, text_font
+
+    results_text = ctk.CTkTextbox(master=frame, corner_radius=8, font=("Arial", 16), fg_color="#ffffff", wrap="word", width=860, height=400)
+    results_text.grid(row=row, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
+
+    results_text.configure(state="normal")
+    results_text.delete(1.0, "end")
+
+    results_text.tag_config("title", cnf = {"font": title_font}, foreground="#11371a")
+    results_text.tag_config("subtitle", cnf = {"font": subtitle_font}, foreground="#70600f")
+    results_text.tag_config("pattern", cnf = {"font": text_font}, foreground="#11371a")
+    results_text.tag_config("separator", cnf = {"font": text_font}, foreground="#11371a", justify="center")
+
+    title_test_txt = "Resultados de la Prueba"
+    results_text.insert("end", f"{title_test_txt}\n\n", "title")
 
     results, errors = test_neural_network(test_data)
 
-    print(f"Excersice number in add_results_info {num_excercise}")
-
-    # Title of the test results
-    title_test_txt = "Resultados de la Prueba"
-    title_test = ctk.CTkLabel(master=frame, text=title_test_txt, font=("Arial", 16, "bold"), text_color="#11371a", anchor="center", justify="center")
-    title_test.grid(row=row, column=0, pady=5, sticky="new", columnspan=12)
-    row += 1
-
-    # For each input the label will show # patter, input, expected output, output, error (values separated by \n)
     for i in range(len(results)):
 
-        # Horizontal separator
-        ctk.CTkFrame(master=frame, corner_radius=0, fg_color="#11371a", height=2).grid(row=row, column=0, pady=5, sticky="nsew", columnspan=12)
-        row += 1
+        separator_txt = "-" * 86
+        results_text.insert("end", f"{separator_txt}\n", "separator")
 
         test_txt = f"Patrón {i+1}:\n"
-        test_lbl = ctk.CTkLabel(master=frame, text=test_txt, font=("Consolas", 16), text_color="#11371a", justify="center", wraplength=840)
-        test_lbl.grid(row=row, column=0, pady=5, sticky="new", columnspan=12)
-        row += 1
+        results_text.insert("end", f"{test_txt}", "subtitle")
 
         input = test_data["inputs"][i]
         output = test_data["outputs"][i]
         error = errors[i]
         output_char = []
         result_char = []
-        # Case 4 the output needs to be convert with char function to show the correct value
+
         if num_excercise == 4:
             for j in range(len(output)):
                 output_char.append(chr(round(output[j])))
                 result_char.append(chr(round(results[i][j])))
-        
+
         y_obtained = ""
         for j in range(len(results[i])):
             y_obtained += f"{results[i][j]:.10f}\n"
@@ -972,13 +965,14 @@ def add_results_info(frame, test_data, row, num_excercise=0):
         if num_excercise != 4:
             test_txt2 = f"Entradas:\n {input}\nSalidas Esperadas:\n {output}\nSalidas Obtenidas:\n {y_obtained}\nError:\n {error}"
         else:
-            test_txt2 = f"Entradas:\n {input}\nSalidas Esperadas:\n {output} = {output_char}\nSalidas Obtenidas:\n {y_obtained} = {result_char} \nError:\n {error}"
+            test_txt2 = f"Entradas:\n {input}\nSalidas Esperadas:\n {output} = {output_char}\nSalidas Obtenidas:\n {y_obtained} = {result_char}\nError:\n {error}"
         
-        test_lbl2 = ctk.CTkLabel(master=frame, text=test_txt2, font=("Consolas", 16), text_color="#11371a", justify="center", wraplength=840)
-        test_lbl2.grid(row=row, column=0, pady=5, sticky="new", columnspan=12)
-        row += 1
+        results_text.insert("end", f"{test_txt2}\n\n", "pattern")
 
-    return row
+    results_text.configure(state="disabled")
+
+    return row + 1
+
 
 def test_frame_creation(master, number_excercise=0):
     global data_test_json, weights_test_json, num_excercise

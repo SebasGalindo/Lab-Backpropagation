@@ -141,3 +141,10 @@ def add_or_replace_secon_case(second_case_json):
     with open(file_path, "w") as file:
         # Write the new data
         json.dump(cases_json, file, indent=4)
+    
+
+if __name__ == "__main__":
+    # Generate the data for the second case
+    data = secondCase_Data()
+    # Save the data in a JSON file
+    save_json(data, "testeo_datos_caso_2") 
