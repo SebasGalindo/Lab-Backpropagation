@@ -1,0 +1,10 @@
+{
+    "kernels": [
+        {
+            "name": "3x3_Edge Detection (Laplacian of Gaussian) plus",
+            "stride": 1,
+            "padding": 0,
+            "percentaje": 0.0
+        }
+    ]
+}
