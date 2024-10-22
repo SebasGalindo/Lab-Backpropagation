@@ -9,8 +9,8 @@ import concurrent.futures
 
 from utils import get_resource_path, open_link, download_json, load_json, save_json
 from backpropagation import backpropagation_training, test_neural_network, set_stop_training, get_graph_json, get_weights_json
-from graphics import plot_neural_network_with_labels, plot_error_total_by_epoch
-from image_treatment import load_images, get_kernel, apply_kernel, download_images, resize_image, plain_image, normalize_image_vector
+from graphics import plot_neural_network_with_labels, plot_error_total_by_epoch, plot_histograms
+from image_treatment import load_images, get_kernel, apply_kernel, download_images, resize_image, plain_image, normalize_image_vector, get_histogram_data
 
 ctk.set_appearance_mode("dark")
 # Global variables
@@ -98,10 +98,9 @@ kernel_names = [
     "more_red",
     "more_green", 
     "more_blue",
-    "3x3_less_white"
     ]
 kernel_history, kernel_data = [], {}
-kernel_series = ["Trucha Arcoíris","Pez Cirujano"]
+kernel_series = ["Pez Cirujano","Trucha Arcoíris"]
 selected_kernel_series = None
 actual_tags = []
 images_history = []
@@ -109,6 +108,47 @@ train_images_data, label_categories = [], None
 chargued_tags_frame = None
 info_window = None
 image_training_frame = None
+
+# Test images variables
+image_status_lbl, txt_categories = None, None
+image_frame, treated_image_frame, categories_frame = None, None, None
+test_image, test_filtered_image = None, None
+test_categories, default_test_categories = [], ["Pez Cirujano","Trucha Arcoíris" ]
+weights_status_lbl, load_weights_btn, result_lbl = None, None, None
+width_entry, height_entry, interpolation_combobox = None, None, None
+
+class ScrollableFrame(ctk.CTk):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Create a canvas
+        self.canvas = tk.Canvas(self)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Create horizontal and vertical scrollbars
+        self.v_scrollbar = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.h_scrollbar = tk.Scrollbar(self, orient="horizontal", command=self.canvas.xview)
+        self.v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        # Configure the canvas to work with the scrollbars
+        self.canvas.configure(yscrollcommand=self.v_scrollbar.set, xscrollcommand=self.h_scrollbar.set)
+
+        # Create a frame inside the canvas
+        self.scrollable_frame = ctk.CTkFrame(self.canvas)
+        
+        # Create a window inside the canvas for the scrollable frame
+        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        # Bind configuration changes
+        self.scrollable_frame.bind("<Configure>", self.on_frame_configure)
+
+    def on_frame_configure(self, event):
+        """
+        Configure the scrollable region for the canvas when the frame changes size.
+        """
+        # Update the scroll region to encompass the inner frame
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
 def main_windowSetup():
     main_window = ctk.CTk()
@@ -175,7 +215,7 @@ def sidebar_creation(master_window):
     train_btn.grid(row=8, column=0, pady=10, sticky="n")
     train_btn.configure(command= lambda: excersice_frame_creation(master=master_window))
 
-    test_solution_btn = ctk.CTkButton(master=sidebar, text="Probar Soluciones", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    test_solution_btn = ctk.CTkButton(master=sidebar, text="Probar Soluciones (Matrices)", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
     test_solution_btn.grid(row=9, column=0, pady=10, sticky="n")
     test_solution_btn.configure(command = lambda: test_frame_creation(master= master_window, number_excercise = 0))
 
@@ -187,6 +227,9 @@ def sidebar_creation(master_window):
     img_training_btn.grid(row=11, column=0, pady=10, sticky="n")
     img_training_btn.configure(command = lambda: image_training_frame_creation(master_window))
     
+    test_images_btn = ctk.CTkButton(master=sidebar, text="Probar Soluciones (Imágenes)", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    test_images_btn.grid(row=12, column=0, pady=10, sticky="n")
+    test_images_btn.configure(command = lambda: test_image_frame_creation(master= master_window))
     
     return sidebar
 
@@ -487,7 +530,7 @@ def train_frame_creation(master = None, num_excercise = 0, row = 8, is_for_image
     function_lbl2 = ctk.CTkLabel(master=train_frame, text=function_txt2, font=("Arial", 16, "bold"), text_color="#fbe122")
     function_lbl2.grid(row=4, column=0, pady=10, sticky="w", columnspan=3)
 
-    layer_o_options = ["Tangente Hiperbólica", "Sigmoidal", "Softplus", "ReLU", "Leaky ReLU", "Lineal", "ELU", "Swish", "softmax"]
+    layer_o_options = ["Tangente Hiperbólica", "Sigmoidal", "Softplus", "ReLU", "Leaky ReLU", "Lineal", "ELU", "Swish"]
     layer_o_combobox = ctk.CTkComboBox(master=train_frame, values=layer_o_options, font=("Arial", 16), width=200, border_width=0)
     layer_o_combobox.grid(row=4, column=3, pady=10, sticky="w", columnspan=3)
     # endregion
@@ -546,7 +589,6 @@ def train_frame_creation(master = None, num_excercise = 0, row = 8, is_for_image
     download_training_data_btn.grid(row=10, column=4, pady=10, sticky="n", columnspan=4)
     download_training_data_btn.configure(command= lambda: download_training_data(num_excercise))
     
-    
     inputs, outputs = [], []
     
     if is_for_image: 
@@ -562,6 +604,7 @@ def train_frame_creation(master = None, num_excercise = 0, row = 8, is_for_image
             
             if status_c == "flattened":
                 n_images = [normalize_image_vector(image) for image in images]
+                category["images"] = n_images
                 
                 for i in range(len(n_images)):
                     inputs.append(n_images[i])
@@ -767,6 +810,17 @@ def start_training(status, status2, bias_entry, alpha_entry, betha_entry, precis
     function_h = layer_h_combobox.get()
     function_o = layer_o_combobox.get()
 
+    if function_h == "Tangente Hiperbólica":
+        function_h = "tanh"
+    elif function_h == "Sigmoidal":
+        function_h = "sigmoid"
+
+    if function_o == "Tangente Hiperbólica":
+        function_o = "tanh"
+    elif function_o == "Sigmoidal":
+        function_o = "sigmoid"
+        
+
     momentum_value = momentum.get()
     m = True if momentum_value == 1 else False
     # endregion
@@ -904,6 +958,8 @@ def results_frame_creation(master, is_train = True, weights_json = None, test_da
     global data_train_json, num_excercises
     inputs, outputs = None, None
     
+    print("in results frame creation is for image", is_for_image)
+    
     weights_json =  get_weights_json() if weights_json is None else weights_json
     results_frame = ctk.CTkFrame(master=master, corner_radius=8, fg_color="#ffffff")
     results_frame.grid(row=11, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
@@ -912,11 +968,15 @@ def results_frame_creation(master, is_train = True, weights_json = None, test_da
     row = 0
     if is_train:
         graph_json = get_graph_json()
-        row = add_weights_info(results_frame, weights_json, row, title_txt="Resultados del Entrenamiento")
+        if not is_for_image:
+            
+            print("Weights Info")
+            
+            row = add_weights_info(results_frame, weights_json, row, title_txt="Resultados del Entrenamiento")
     
-        # Horizontal separator
-        ctk.CTkFrame(master=results_frame, corner_radius=0, fg_color="#11371a", height=2).grid(row=row, column=0, pady=5, sticky="nsew", columnspan=12)
-        row += 1
+            # Horizontal separator
+            ctk.CTkFrame(master=results_frame, corner_radius=0, fg_color="#11371a", height=2).grid(row=row, column=0, pady=5, sticky="nsew", columnspan=12)
+            row += 1
 
         row = add_graph_info(results_frame, graph_json, row)
 
@@ -943,6 +1003,8 @@ def results_frame_creation(master, is_train = True, weights_json = None, test_da
         "function_h_name": weights_json["function_h_name"],
         "function_o_name": weights_json["function_o_name"]
     }
+
+    print("Results Info")
 
     add_results_info(results_frame, test_data, row, num_excercise, is_for_image)
 
@@ -1016,7 +1078,7 @@ def add_weights_info(frame, weights_json, row, title_txt):
     return row
 
 def add_graph_info(frame, graph_json, row):
-     # Labels for max_epochs, cuantity neurons, function h name, function o name,
+    # Labels for max_epochs, cuantity neurons, function h name, function o name,
     # betha if momentum is selected like "Momentum: Si con Betha = {value}" otherwise "Momentum: No"
     
     max_epochs_txt = f"Número Máximo de Épocas: {graph_json['max_epochs']}"
@@ -1077,6 +1139,8 @@ def add_graph_info(frame, graph_json, row):
 def add_results_info(frame, test_data, row, num_excercise=0, is_for_image = False):
     global results_text, title_font, subtitle_font, text_font, label_categories
 
+    print("in add results info is for image", is_for_image)
+
     results_text = ctk.CTkTextbox(master=frame, corner_radius=8, font=("Arial", 16), fg_color="#ffffff", wrap="word", width=860, height=400)
     results_text.grid(row=row, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
 
@@ -1092,9 +1156,10 @@ def add_results_info(frame, test_data, row, num_excercise=0, is_for_image = Fals
     results_text.insert("end", f"{title_test_txt}\n\n", "title")
 
     results, errors = test_neural_network(test_data)
+    label_list = list(label_categories) if is_for_image else None
 
     for i in range(len(results)):
-
+        print("Writing Results ... ", results[i])
         separator_txt = "-" * 86
         results_text.insert("end", f"{separator_txt}\n", "separator")
 
@@ -1117,31 +1182,34 @@ def add_results_info(frame, test_data, row, num_excercise=0, is_for_image = Fals
         if is_for_image:
             try:
                 output_round = round(output[0])
-                output_label = label_categories[output_round]
+                output_label = label_list[output_round]
             except ValueError:
                 output_label = "Desconocido"
                 
             try:
                 result_round = round(results[i][0])
-                result_label = label_categories[result_round]
+                result_label = label_list[result_round]
             except ValueError:
                 result_label = "Desconocido"
 
         y_obtained = ""
         for j in range(len(results[i])):
-            y_obtained += f"{results[i][j]:.10f}\n"
+            y_obtained += f"{results[i][j]:.10f}"
+            if not is_for_image:
+                y_obtained += '\n'
 
-        if num_excercise != 4:
+        if num_excercise != 4 and not is_for_image:
             test_txt2 = f"Entradas:\n {input}\nSalidas Esperadas:\n {output}\nSalidas Obtenidas:\n {y_obtained}\nError:\n {error}"
         elif is_for_image:
-            test_txt2 = f"Entradas:\n image \nSalidas Esperadas:\n {output} \n {output_label}\nSalidas Obtenidas:\n {y_obtained} \n {result_label} \nError:\n {error}"
+            print("is for image")
+            test_txt2 = f"Entradas:\n image \nSalidas Esperadas:\n {output} = {output_label}\nSalidas Obtenidas:\n {y_obtained} = {result_label} \nError:\n {error}"
         else:
             test_txt2 = f"Entradas:\n {input}\nSalidas Esperadas:\n {output} = {output_char}\nSalidas Obtenidas:\n {y_obtained} = {result_char}\nError:\n {error}"
         
         results_text.insert("end", f"{test_txt2}\n\n", "pattern")
 
     results_text.configure(state="disabled")
-
+    print("Results Info Done")
     return row + 1
 
 def test_frame_creation(master, number_excercise=0):
@@ -1261,7 +1329,8 @@ def create_weights_frame(frame, data_weights_json, row=4):
     return weights_frame
 
 def image_treatment_frame_creation(frame):
-    global is_folder_img, kernel_names, apply_kernel_btn, remove_kernel_btn,image_treatment_btn_2, filtered_images,download_images_btn, download_kernel_btn
+    global is_folder_img, kernel_names, apply_kernel_btn, remove_kernel_btn,image_treatment_btn_2, filtered_images,download_images_btn,\
+        download_kernel_btn, resize_images_btn
 
     image_treatment_frame = ctk.CTkScrollableFrame(master=frame, corner_radius=0, fg_color="#11371A",scrollbar_button_color="#112f16", scrollbar_button_hover_color="#446249")
     image_treatment_frame.grid(row=0, column=2, sticky="nsew", columnspan=12, rowspan=12)
@@ -1289,70 +1358,145 @@ def image_treatment_frame_creation(frame):
     image_treatment_btn_2.configure(state = "disabled")
     image_treatment_btn_2.configure(command= lambda: chargue_filtered_images(image_treatment_frame))
     
+    
+    first_functions_frame = ctk.CTkFrame(master=image_treatment_frame, corner_radius=8, fg_color="#11371A")
+    first_functions_frame.grid(row=2, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
+    first_functions_frame = grid_setup(first_functions_frame)
+    
     # CTkLabel for kernel selection
-    kernel_lbl = ctk.CTkLabel(master=image_treatment_frame, text="Kernel:", font=("Arial", 16, "bold"), text_color="#fbe122")
-    kernel_lbl.grid(row=2, column=0, pady=10, padx=15, sticky="en", columnspan=1)
+    kernel_lbl = ctk.CTkLabel(master=first_functions_frame, text="Kernel:", font=("Arial", 16, "bold"), text_color="#fbe122")
+    kernel_lbl.grid(row=2, column=0, pady=10, padx=15, sticky="wsn", columnspan=1)
     
     # CTkComboBox for kernel selection
-    kernel_combobox = ctk.CTkComboBox(master=image_treatment_frame,values=kernel_names  , width=200, height=40, font=("Arial", 13, "bold"), fg_color="#fbe122", text_color="#0F1010", state="readonly")
+    kernel_combobox = ctk.CTkComboBox(master=first_functions_frame,values=kernel_names  , width=200, height=40, font=("Arial", 13, "bold"), fg_color="#fbe122", text_color="#0F1010", state="readonly")
     kernel_combobox.grid(row=2, column=1, pady=10, padx = 10, sticky="wn", columnspan=2)
     
     # CTkLabel for stride value
-    stride_lbl = ctk.CTkLabel(master=image_treatment_frame, text="Stride:", font=("Arial", 16, "bold"), text_color="#fbe122")
+    stride_lbl = ctk.CTkLabel(master=first_functions_frame, text="Stride:", font=("Arial", 16, "bold"), text_color="#fbe122")
     stride_lbl.grid(row=2, column=3, pady=10, sticky="en", columnspan=1)
 
     # CTkEntry for stride value
-    stride_entry = ctk.CTkEntry(master=image_treatment_frame, width=60, font=("Arial", 13, "bold"))
+    stride_entry = ctk.CTkEntry(master=first_functions_frame, width=60, font=("Arial", 13, "bold"))
     stride_entry.grid(row=2, column=4, pady=10, padx = 10, sticky="wn", columnspan=1)
     stride_entry.insert(0, "1")
     
     # CTkLabel for padding value
-    padding_lbl = ctk.CTkLabel(master=image_treatment_frame, text="Padding:", font=("Arial", 16, "bold"), text_color="#fbe122")
+    padding_lbl = ctk.CTkLabel(master=first_functions_frame, text="Padding:", font=("Arial", 16, "bold"), text_color="#fbe122")
     padding_lbl.grid(row=2, column=5, pady=10, sticky="en", columnspan=1)
     
     # CTkEntry for padding value
-    padding_entry = ctk.CTkEntry(master=image_treatment_frame, width=60, font=("Arial", 13, "bold"))
+    padding_entry = ctk.CTkEntry(master=first_functions_frame, width=60, font=("Arial", 13, "bold"))
     padding_entry.grid(row=2, column=6, pady=10, padx = 10, sticky="wn", columnspan=1)
     padding_entry.insert(0, "0")
     
     # CTkLabel for percentaje value
-    percentaje_lbl = ctk.CTkLabel(master=image_treatment_frame, text="Porcentaje para color:", font=("Arial", 16, "bold"), text_color="#fbe122")
+    percentaje_lbl = ctk.CTkLabel(master=first_functions_frame, text="Porcentaje para color:", font=("Arial", 16, "bold"), text_color="#fbe122")
     percentaje_lbl.grid(row=2, column=7, pady=10, sticky="en", columnspan=1)
 
     # CTkEntry for percentaje value
-    percentaje_entry = ctk.CTkEntry(master=image_treatment_frame, width=60, font=("Arial", 13, "bold"))
+    percentaje_entry = ctk.CTkEntry(master=first_functions_frame, width=60, font=("Arial", 13, "bold"))
     percentaje_entry.grid(row=2, column=8, pady=10, padx = 10, sticky="wn", columnspan=1)
     percentaje_entry.insert(0, "0.5")
     
     # Button for apply kernel
-    apply_kernel_btn = ctk.CTkButton(master=image_treatment_frame ,  text="Aplicar Kernel", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    apply_kernel_btn = ctk.CTkButton(master=first_functions_frame ,  text="Aplicar Kernel", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
     apply_kernel_btn.grid(row=2, column=9, pady=10, sticky="wn", columnspan=2)
     apply_kernel_btn.configure(command= lambda: apply_sel_kernel(kernel_combobox.get(), int(stride_entry.get()), int(padding_entry.get()), float(percentaje_entry.get()) , image_treatment_frame))
     apply_kernel_btn.configure(state = "disabled")  
     
     # Button for remove kernel
-    remove_kernel_btn = ctk.CTkButton(master=image_treatment_frame, text="Eliminar Kernel", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    remove_kernel_btn = ctk.CTkButton(master=first_functions_frame, text="Eliminar Kernel", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
     remove_kernel_btn.grid(row=2, column=11, pady=10, sticky="wn", columnspan=2)
     remove_kernel_btn.configure(command= lambda: remove_kernel())
     remove_kernel_btn.configure(state = "disabled")  
     
+    # Add the resize section to the frame   
+    resize_frame = ctk.CTkFrame(master=image_treatment_frame, corner_radius=8, fg_color="#11371A")
+    resize_frame.grid(row=3, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
+    resize_frame = resize_frame_creation(resize_frame, for_training=False, for_treatment=True)
+    
+    # Frame for additional functions of the images
+    additional_functions_frame = ctk.CTkFrame(master=image_treatment_frame, corner_radius=8, fg_color="#11371A")
+    additional_functions_frame.grid(row=4, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
+    additional_functions_frame = grid_setup(additional_functions_frame)
+    
+    # label for the angle of rotation of the images
+    angle_lbl = ctk.CTkLabel(master=additional_functions_frame, text="Ángulo:", font=("Arial", 16, "bold"), text_color="#fbe122")
+    angle_lbl.grid(row=0, column=0, pady=10, padx=15, sticky="swen", columnspan=1)
+    
+    # entry for the angle of rotation of the images
+    angle_entry = ctk.CTkEntry(master=additional_functions_frame, width=60, font=("Arial", 13, "bold"))
+    angle_entry.grid(row=0, column=1, pady=10, padx = 10, sticky="swen", columnspan=1)
+    
+    # Button for rotate images
+    rotate_images_btn = ctk.CTkButton(master=additional_functions_frame, text="Rotar Imágenes", fg_color="#fbe122", width=120, height=30, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    rotate_images_btn.grid(row=0, column=2, pady=10, sticky="wn", columnspan=2)
+    rotate_images_btn.configure(command= lambda: rotate_images(angle_entry.get()))
+    
+    # ComboBox for the type of colormap in cv2 options
+    colormaps = ["AUTUMN", "BONE", "JET", "WINTER", 
+                 "RAINBOW", "OCEAN", "SUMMER", "SPRING", 
+                 "COOL", "HSV", "PINK", "HOT", "PARULA",
+                 "MAGMA", "INFERNO", "PLASMA", "VIRIDIS", 
+                 "CIVIDIS","TWILIGHT", "TWILIGHT_SHIFTED", "TURBO",
+                 "DEEPGREEN"]
+    
+    combobox_colormap = ctk.CTkComboBox(master=additional_functions_frame, values=colormaps, width=200, height=40, font=("Arial", 13, "bold"), fg_color="#fbe122", text_color="#0F1010", state="readonly")
+    combobox_colormap.grid(row=0, column=4, pady=10, padx=10, sticky="swen", columnspan=2)
+    
+    # Button for apply colormap
+    apply_colormap_btn = ctk.CTkButton(master=additional_functions_frame, text="Aplicar Mapa de Color", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    apply_colormap_btn.grid(row=0, column=6, pady=10, sticky="wn", columnspan=2)
+    apply_colormap_btn.configure(command= lambda: apply_colormap(combobox_colormap.get()))
+    
+    # Button to show the histogram of the images
+    histogram_btn = ctk.CTkButton(master=additional_functions_frame, text="Mostrar Histograma", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    histogram_btn.grid(row=0, column=8, pady=10, sticky="wn", columnspan=2)
+    histogram_btn.configure(command= lambda: show_histogram())
+    
+    # Label for the compression factor of the images
+    compression_lbl = ctk.CTkLabel(master=additional_functions_frame, text="Factor de Compresión:", font=("Arial", 16, "bold"), text_color="#fbe122")
+    compression_lbl.grid(row=1, column=0, pady=10, padx=15, sticky="swen", columnspan=1)
+    
+    # Entry for the compression factor of the images
+    compression_entry = ctk.CTkEntry(master=additional_functions_frame, width=60, font=("Arial", 13, "bold"))
+    compression_entry.grid(row=1, column=1, pady=10, padx = 10, sticky="swen", columnspan=1)
+    
+    # Button to compress the images with the DTC algorithm
+    compress_btn = ctk.CTkButton(master=additional_functions_frame, text="Comprimir Imágenes", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    compress_btn.grid(row=1, column=2, pady=10, sticky="wn", columnspan=2)
+    compress_btn.configure(command= lambda: compress_images(compression_entry.get()))
+
+    # label for the umbral value for the binarization of the images
+    umbral_lbl = ctk.CTkLabel(master=additional_functions_frame, text="Umbral:", font=("Arial", 16, "bold"), text_color="#fbe122")
+    umbral_lbl.grid(row=1, column=6, pady=10, padx=15, sticky="swen", columnspan=1)
+    
+    # entry for the umbral value for the binarization of the images
+    umbral_entry = ctk.CTkEntry(master=additional_functions_frame, width=60, font=("Arial", 13, "bold"))
+    umbral_entry.grid(row=1, column=7, pady=10, padx = 10, sticky="swen", columnspan=1)
+    
+    # Button to binarize the images
+    binarize_btn = ctk.CTkButton(master=additional_functions_frame, text="Binarizar Imágenes", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    binarize_btn.grid(row=1, column=8, pady=10, sticky="wn", columnspan=2)
+    binarize_btn.configure(command= lambda: binarize_images(umbral_entry.get()))
+    
     # Ctk label for the tag of the images
     tag_lbl = ctk.CTkLabel(master=image_treatment_frame, text="Etiqueta:", font=("Arial", 16, "bold"), text_color="#fbe122")
-    tag_lbl.grid(row=4, column=0, pady=10, padx=15, sticky="swen", columnspan=1)
+    tag_lbl.grid(row=6, column=0, pady=10, padx=15, sticky="swen", columnspan=1)
     
     # Ctk entry for the tag of the images
     tag_entry = ctk.CTkEntry(master=image_treatment_frame, width=160, font=("Arial", 13, "bold"))
-    tag_entry.grid(row=4, column=1, pady=10, padx = 10, sticky="swen", columnspan=3)
+    tag_entry.grid(row=6, column=1, pady=10, padx = 10, sticky="swen", columnspan=3)
     
     # Button for download images
     download_images_btn = ctk.CTkButton(master=image_treatment_frame, text="Descargar Imágenes", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
-    download_images_btn.grid(row=4, column=4, pady=10, sticky="wn", columnspan=2)
+    download_images_btn.grid(row=6, column=4, pady=10, sticky="wn", columnspan=2)
     download_images_btn.configure(command= lambda: download_images(tag_entry.get(), filtered_images))
     download_images_btn.configure(state = "disabled")
     
     # Button for download kernel used
     download_kernel_btn = ctk.CTkButton(master=image_treatment_frame, text="Descargar Registro de Kernels", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
-    download_kernel_btn.grid(row=4, column=6, pady=10, sticky="wn", columnspan=2)
+    download_kernel_btn.grid(row=6, column=6, pady=10, sticky="wn", columnspan=2)
     download_kernel_btn.configure(command= lambda: download_kernel_data())
     download_kernel_btn.configure(state = "disabled")
 
@@ -1365,13 +1509,18 @@ def check_folder(folder_check):
         is_folder_img = False
             
 def chargue_images(frame, is_folder):
-    global images, images_history, apply_kernel_btn, images_labels, filtered_images_labels, kernel_history
+    global images, images_history, apply_kernel_btn, images_labels, filtered_images_labels, kernel_history, filtered_images
 
     images_history = []
 
     images_temp = load_images(is_folder)
 
-    if images_temp is None and images is None:
+    print("images temp ",images_temp)
+
+    if (images_temp is None or len(images_temp) == 0) and images is None:
+        return
+    
+    if len(images_temp) == 0 and images is None:
         return
     
     if len(images_temp) == 0 and images is not None:
@@ -1384,20 +1533,31 @@ def chargue_images(frame, is_folder):
         filtered_images_labels = None
         kernel_history = []
         
+    num_images_resized = ""    
+    for i in range(len(images)):
+        if images[i].shape[1] > 500:
+            aspect_ratio = 500 / float(images[i].shape[1])
+            ne_height = int(images[i].shape[0] * aspect_ratio)
+            images[i] = resize_image(images[i], 500, ne_height, "Bicubic")
+            num_images_resized += f"{i+1}, "
+
+    if num_images_resized != "":
+        num_images_resized = num_images_resized[:-2]
+        show_default_error(f"Las imágenes {num_images_resized} han sido redimensionada a un maximum de 500 pixeles de ancho")
+
     # Show the images in a new frame
-    images_txt = create_images_frame(frame, images)
     filtered_images = images.copy()
-    create_images_frame(frame, filtered_images, col=7, is_filtered=True)
+    images_txt = create_images_frame(frame, images)
+    create_images_frame(frame, filtered_images, col=6, is_filtered=True)
     apply_kernel_btn.configure(state = "normal")
           
 def chargue_filtered_images(frame):
     global filtered_images, images, images_labels, filtered_images_labels, images_history, remove_kernel_btn, kernel_history, download_kernel_btn \
-    , kernel_data, download_kernel_btn
+    , kernel_data, download_kernel_btn, next_images_btn, before_images_btn
 
     if filtered_images is None:
         return
-    images_labels = None
-    images = filtered_images
+    images = filtered_images.copy()
     
     images_history.append(images)
     
@@ -1410,15 +1570,19 @@ def chargue_filtered_images(frame):
     if len(images_history) > 1:
         remove_kernel_btn.configure(state = "normal")
     
-    # Show the images in a new frame
-    create_images_frame(frame, images, col=0, is_filtered=False)
+    update_show_images(next_images_btn, before_images_btn, 0)
           
 def create_images_frame(frame, images, col=0, is_filtered=False):
     # Load the images, each image need to be in a label
-    global images_labels, actual_first_image, filtered_images_labels, next_images_btn, before_images_btn
+    global images_labels, actual_first_image, filtered_images_labels, next_images_btn, before_images_btn, filtered_images
 
-    image_frame = ctk.CTkScrollableFrame(master=frame, corner_radius=8, fg_color="#ffffff", height=600)
-    image_frame.grid(row=3, column=col, sticky="nsew", columnspan=6, pady=10, padx=10)
+    main_frame = ctk.CTkScrollableFrame(master=frame, corner_radius=8, fg_color="#ffffff", width=600 ,height=600, orientation="vertical")
+    main_frame.grid(row=5, column=col, sticky="nsw", columnspan=6, pady=10, padx=10)
+    main_frame = grid_setup(main_frame)
+
+    image_frame = ctk.CTkScrollableFrame(master=main_frame, corner_radius=8, fg_color="#ffffff", orientation="horizontal")
+    image_frame.grid(row=0, column=0, sticky="nsew", columnspan=12, pady=10, padx=10, rowspan=12)
+    image_frame = grid_setup(image_frame)
     
     # create a label for each image in the first 10 images, if there are more than 10 images create a button to show next images
     images_labels = [] if images_labels is None else images_labels
@@ -1426,26 +1590,33 @@ def create_images_frame(frame, images, col=0, is_filtered=False):
     
     last_image = 10 if len(images) > 10 else len(images)
     actual_first_image = 0
+    j= 1
+    num_images_resized = ""
+    height_total = 0
     for i in range(actual_first_image, last_image):
         image = Image.fromarray(images[i])
-        image = image.resize((500, 500))
-        photo = ctk.CTkImage(dark_image=image, light_image=image,size=(500, 500))
+        photo = ctk.CTkImage(dark_image=image, light_image=image,size=(images[i].shape[1], images[i].shape[0]))
+        height_total += images[i].shape[0]
         label = ctk.CTkLabel(master=image_frame, image=photo, text="", compound="center")
-        label.grid(row=i, column=0, sticky="nsew", pady=5, columnspan=12)
+        label.grid(row=j, column=0, sticky="nsew", pady=5, columnspan=12)
         if is_filtered:
             filtered_images_labels.append(label)
         else:
             images_labels.append(label)
+        j += 1
     
     next_images_btn = ctk.CTkButton(master=image_frame, text=">", fg_color="#fbe122", width=80, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
-    next_images_btn.grid(row=11, column=1, sticky="nsew")
+    next_images_btn.grid(row=0, column=1, sticky="nsew", padx=2)
     next_images_btn.configure(command= lambda: update_show_images(next_images_btn, before_images_btn, actual_first_image+10))
     
     before_images_btn = ctk.CTkButton(master=image_frame, text="<", fg_color="#fbe122", width=80, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
-    before_images_btn.grid(row=11, column=0, sticky="nsew")
+    before_images_btn.grid(row=0, column=0, sticky="nsew", padx=0)
     before_images_btn.configure(command= lambda: update_show_images(next_images_btn, before_images_btn, actual_first_image-10))
+
+    height_total += 100
+    image_frame.configure(height=height_total)
     
-    if last_image == len(images):
+    if last_image == len(images) and last_image == len(filtered_images):
         next_images_btn.configure(state="disabled")
     else:
         next_images_btn.configure(state="normal")
@@ -1462,14 +1633,16 @@ def update_show_images(next_images_btn, before_images_btn, actual_first_img):
     last_image = (actual_first_img+10) if len(images) > actual_first_img + 10 else len(images)
     j = 0
     for i in range(actual_first_img,last_image):
-        image = Image.fromarray(images[i])
-        image = image.resize((500, 500))
-        photo = ctk.CTkImage(dark_image=image, light_image=image, size=(500, 500))
+        width = images[i].shape[1]
+        height = images[i].shape[0]
+        image_temp = Image.fromarray(images[i])
+        photo = ctk.CTkImage(dark_image=image_temp, light_image=image_temp, size=(width, height))
         images_labels[j].configure(image=photo)
         
+        width = filtered_images[i].shape[1]
+        height = filtered_images[i].shape[0]
         image_f = Image.fromarray(filtered_images[i])
-        image_f = image_f.resize((500, 500))
-        photo_f = ctk.CTkImage(dark_image=image_f, light_image=image_f, size=(500, 500))
+        photo_f = ctk.CTkImage(dark_image=image_f, light_image=image_f, size=(width, height))
         filtered_images_labels[j].configure(image=photo_f)      
         
         j += 1
@@ -1493,14 +1666,63 @@ def clear_frame(frame):
     for widget in frame.winfo_children():
         widget.destroy()
 
-def apply_sel_kernel(kernel_name, stride=1, padding=0, percentaje = 0.5 ,frame=None):
+def apply_sel_kernel(kernel_name, stride=1, padding=0, percentaje = 0.5 , sub_info = None):
     global images, images_history, filtered_images, next_images_btn, before_images_btn, actual_first_image, image_treatment_btn_2\
         , download_images_btn, kernel_data
 
     mod_kernels = ["rgb_to_bgr", "bgr_to_rgb", "gray_to_rgb", "gray_to_bgr", "rgb_to_gray", "bgr_to_gray"]
-    percentaje_kernels = ["less_red", "less_green", "less_blue", "more_red", "more_green", "more_blue"]
-    is_matrix = (kernel_name not in mod_kernels) and (kernel_name not in percentaje_kernels)
-    kernel = get_kernel(kernel_name, percentaje)
+    percentaje_kernels = ["less_red", "less_green", "less_blue", "more_red", "more_green", "more_blue"] 
+    special_functions = ["rotate_image", "apply_colormap", "compress_image", "binarize_image"]
+    type_data = ""
+    kernel = None
+    
+    print("Applying kernel: ", kernel_name)
+    
+    if images is None:
+        show_default_error("No hay imágenes cargadas para aplicar el proceso")
+    
+    if kernel_name in mod_kernels:
+        type_data = "color modification"
+        kernel = get_kernel(kernel_name)
+        kernel_data = {
+            "name": kernel_name,
+            "percentaje": percentaje,
+            "type": type_data
+        }
+    elif kernel_name in percentaje_kernels:
+        type_data = "color percentaje"
+        kernel = get_kernel(kernel_name, percentaje)
+        kernel_data = {
+            "name": kernel_name,
+            "percentaje": percentaje,
+            "type": type_data
+        }
+    elif kernel_name in special_functions:
+        type_data = "special function"
+        kernel = get_kernel(kernel_name)
+        kernel_data = {
+            "name": kernel_name,
+            "sub_info": sub_info,
+            "type": type_data
+        }
+        
+    elif kernel_name == "resize_image":
+        type_data = "resize"
+        kernel = get_kernel(kernel_name)
+        kernel_data = {
+            "name": kernel_name,
+            "sub_info": sub_info,
+            "type": type_data,
+        } 
+    else:
+        type_data = "kernel"
+        kernel = get_kernel(kernel_name)
+        kernel_data = {
+            "name": kernel_name,
+            "stride": stride,
+            "padding": padding,
+            "type": type_data
+        }
         
     if images_history is None:
         images_history = [] 
@@ -1516,12 +1738,21 @@ def apply_sel_kernel(kernel_name, stride=1, padding=0, percentaje = 0.5 ,frame=N
     with concurrent.futures.ProcessPoolExecutor() as executor:
         # Enviar las tareas al pool de procesos, junto con el índice para asegurar el orden
         futures = None
-        if is_matrix:
+        if type_data == "kernel":
             futures = {executor.submit(apply_kernel, images[i], kernel, padding, stride): i for i in range(len(images))}
-        elif kernel_name in percentaje_kernels:
+        elif type_data == "color percentaje":
             futures = {executor.submit(kernel, images[i], percentaje): i for i in range(len(images))}
-        else:
+        elif type_data == "color modification":
             futures = {executor.submit(kernel, images[i]): i for i in range(len(images))}
+        elif type_data == "resize":
+            futures = {executor.submit(kernel, images[i], sub_info["width"], sub_info["height"], sub_info["interpolation"]): i for i in range(len(images))}
+        elif type_data == "special function":
+            data = 0
+            data = sub_info["colormap"] if kernel_name == "apply_colormap" else data
+            data = sub_info["compression"] if kernel_name == "compress_image" else data
+            data = sub_info["umbral"] if kernel_name == "binarize_image" else data
+            data = sub_info["angle"] if kernel_name == "rotate_image" else data
+            futures = {executor.submit(kernel, images[i], data): i for i in range(len(images))}
         # Recuperar los resultados en el orden original
         for future in concurrent.futures.as_completed(futures):
             index = futures[future]  # Recuperamos el índice de la imagen
@@ -1531,14 +1762,7 @@ def apply_sel_kernel(kernel_name, stride=1, padding=0, percentaje = 0.5 ,frame=N
     
     image_treatment_btn_2.configure(state = "normal")
     download_images_btn.configure(state = "normal")
-    
-    kernel_data = {
-        "name": kernel_name,
-        "stride": stride,
-        "padding": padding,
-        "percentaje": percentaje
-    }
-     
+
 def remove_kernel():
     global images_history, images, filtered_images, remove_kernel_btn, download_images_btn, kernel_history, download_kernel_btn
     
@@ -1799,9 +2023,11 @@ def check_pre_treated(pre_treated_check):
         kernel_combobox.configure(state="disabled")
         load_kernel_btn.configure(state="disabled")
         selected_kernel_series = "None"
+        status_kernel_lbl.configure(text="", text_color="green")  
     else:
         kernel_combobox.configure(state="readonly")
         load_kernel_btn.configure(state="normal")
+        selected_kernel_series = None
 
     status_kernel_lbl.configure(text="", text_color="red")
 
@@ -1862,46 +2088,56 @@ def start_treatment_images():
     load_kernel_btn.configure(state="disabled")
     
 def apply_kernel_series(images, selected_kernel_series):
-    global main_window, res
+    global main_window
     mod_kernels = ["rgb_to_bgr", "bgr_to_rgb", "gray_to_rgb", "gray_to_bgr", "rgb_to_gray", "bgr_to_gray"]
     percentaje_kernels = ["less_red", "less_green", "less_blue", "more_red", "more_green", "more_blue"]
+    special_functions = ["rotate_image", "apply_colormap", "compress_image", "binarize_image"]
     
     filtered_images = images.copy()
-    
-    for kernel in selected_kernel_series["kernels"]:
-        kernel_name = kernel["name"]
-        stride = kernel["stride"]
-        padding = kernel["padding"]
-        percentaje = kernel["percentaje"] if "percentaje" in kernel else 0
+    kernel = None
+    for kernel_json in selected_kernel_series["kernels"]:
         
-        is_matrix = (kernel_name not in mod_kernels) and (kernel_name not in percentaje_kernels)
-        kernel_f = get_kernel(kernel_name, percentaje)
+        kernel_name = kernel_json["name"]
+        type_data = kernel_json["type"]
+        sub_info = kernel_json["sub_info"] if "sub_info" in kernel_json else None
+        percentaje = kernel_json["percentaje"] if "percentaje" in kernel_json else 0
+        padding = kernel_json["padding"] if "padding" in kernel_json else 0
+        stride = kernel_json["stride"] if "stride" in kernel_json else 1
+
+
+        if kernel_name in percentaje_kernels:
+            kernel = get_kernel(kernel_name, percentaje)
+        else:
+            kernel = get_kernel(kernel_name)
         
         print(str("-" * 50))
-        print(f"Applying kernel: {kernel_name}")
-        
-        show_treatment_info(kernel_name, stride, padding, percentaje, len(images))
+        print(f"Applying kernel: \n {json.dumps(kernel_json, indent=4)}")
+        show_treatment_info(kernel_json, len(images))
         
         main_window.update()
         
-          # Ajusta el tiempo si es necesario
-        
-        # Crear un pool de procesos
         with concurrent.futures.ProcessPoolExecutor() as executor:
             # Enviar las tareas al pool de procesos, junto con el índice para asegurar el orden
             futures = None
-            if is_matrix:
-                futures = {executor.submit(apply_kernel, filtered_images[i], kernel_f, padding, stride): i for i in range(len(images))}
-            elif kernel_name in percentaje_kernels:
-                futures = {executor.submit(kernel_f, filtered_images[i], percentaje): i for i in range(len(images))}
-            else:
-                futures = {executor.submit(kernel_f, filtered_images[i]): i for i in range(len(images))}
+            if type_data == "kernel":
+                futures = {executor.submit(apply_kernel, filtered_images[i], kernel, padding, stride): i for i in range(len(filtered_images))}
+            elif type_data == "color percentaje":
+                futures = {executor.submit(kernel, filtered_images[i], percentaje): i for i in range(len(filtered_images))}
+            elif type_data == "color modification":
+                futures = {executor.submit(kernel, filtered_images[i]): i for i in range(len(filtered_images))}
+            elif type_data == "resize":
+                futures = {executor.submit(kernel, filtered_images[i], sub_info["width"], sub_info["height"], sub_info["interpolation"]): i for i in range(len(filtered_images))}
+            elif type_data == "special function":
+                data = 0
+                data = sub_info["colormap"] if kernel_name == "apply_colormap" else data
+                data = sub_info["compression"] if kernel_name == "compress_image" else data
+                data = sub_info["umbral"] if kernel_name == "binarize_image" else data
+                data = sub_info["angle"] if kernel_name == "rotate_image" else data
+                futures = {executor.submit(kernel, filtered_images[i], data): i for i in range(len(filtered_images))}
             # Recuperar los resultados en el orden original
             for future in concurrent.futures.as_completed(futures):
-                index = futures[future]
-                filtered_images[index] = future.result()
-                
-    
+                index = futures[future]  # Recuperamos el índice de la imagen
+                filtered_images[index] = future.result()  # Asignamos el resultado en el índice correcto
                 
     return filtered_images
 
@@ -1968,8 +2204,7 @@ def plained_images():
     
     if len(train_images_data) >= 2:
         finish_data_btn.configure(state="normal")  
-        
-        
+            
 def default_frame_img_training(master,title,row,col):
     
     default_frame = ctk.CTkScrollableFrame(master=master, corner_radius=4, fg_color="#ffffff", height=200)
@@ -2020,8 +2255,102 @@ def resize_images(width, height, interpolation):
             sp_line = "-"*25
             txt_treated_train_images.insert("end", f"{sp_line}\n", "pattern")
      
-def resize_frame_creation(frame):
-    global resize_images_btn
+def resize_treatment_images(width, height, interpolation): 
+    print(f"Resizing images to width: {width}, height: {height}, interpolation: {interpolation}")
+    
+    if width == "" or height == "" or interpolation == "":
+        show_info_resize_images("Debe ingresar el ancho, alto y la interpolación")
+        return
+    
+    if not width.isdigit() or not height.isdigit():
+        show_info_resize_images("El ancho y el alto deben ser números enteros")
+        return
+    
+    apply_sel_kernel(kernel_name="resize_image", sub_info={"width": int(width), "height": int(height), "interpolation": interpolation})
+     
+def apply_colormap(colormap):
+    if colormap == "":
+        show_default_error("Debe seleccionar un mapa de colores")
+        return
+    
+    apply_sel_kernel(kernel_name="apply_colormap", sub_info={"colormap": colormap})
+   
+def compress_images(compression):
+    if compression == "":
+        show_default_error("Debe seleccionar un nivel de compresión")
+        return
+    
+    try:
+        compression = float(compression)
+    except:
+        show_default_error("El nivel de compresión debe ser un número decimal")
+        return
+    
+    apply_sel_kernel(kernel_name="compress_image", sub_info={"compression": compression})
+    
+def binarize_images(umbral):
+    if umbral == "":
+        show_default_error("Debe ingresar un umbral")
+        return
+    
+    if not umbral.isdigit():
+        show_default_error("El umbral debe ser un número entero")
+        return
+    
+    if not int(umbral) in range(0, 255):
+        show_default_error("El umbral debe estar en el rango de 0 a 255")
+        return
+    
+    apply_sel_kernel(kernel_name="binarize_image", sub_info={"umbral": int(umbral)})
+   
+def rotate_images(angle):
+    if angle == "":
+        show_default_error("Debe ingresar un ángulo de rotación")
+        return
+    
+    if not angle.isdigit():
+        show_default_error("El ángulo de rotación debe ser un número entero")
+        return
+    
+    if int(angle) not in range(-360, 360):
+        show_default_error("El ángulo de rotación debe estar en el rango de 0 a 360")
+        return
+    
+    apply_sel_kernel(kernel_name="rotate_image", sub_info={"angle": int(angle)})   
+
+def show_histogram():
+    global filtered_images, info_window
+    
+    histogram_images_data = []
+    
+    for image in filtered_images:
+        histogram_images_data.append(get_histogram_data(image))
+    
+    figure = plot_histograms(histogram_images_data)
+    
+    # Top level window for the histogram
+    info_window = ctk.CTkToplevel(master=main_window, fg_color="#11371A")
+    info_window.title("Histograma de las Imágenes")
+    info_window.geometry("800x600")
+    info_window.resizable(False, False)
+    info_window = grid_setup(info_window)
+    icon_path = get_resource_path("Resources/brand_logo.ico")
+    info_window.iconbitmap(icon_path)
+    info_window.attributes("-topmost", True)
+    info_window.bind("esc", lambda e: info_window.destroy())
+    
+    # Scrollable frame to put the figure canvas
+    frame = ctk.CTkScrollableFrame(master=info_window, corner_radius=8, fg_color="#11371A")
+    frame.grid(row=0, column=0, sticky="nsew", columnspan=12, rowspan=12)
+    frame = grid_setup(frame)
+    
+    # Only one figure, create one canvas
+    canvas = FigureCanvasTkAgg(figure, master=frame)
+    canvas.draw()
+    canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew", columnspan=12, rowspan=12)
+    
+def resize_frame_creation(frame, for_training = False, for_treatment = False):
+    global resize_images_btn, width_entry, height_entry, interpolation_combobox
     # Input for the width of the images
     width_lbl = ctk.CTkLabel(master=frame, text="Ancho:", font=("Arial", 16, "bold"), text_color="#fbe122")
     width_lbl.grid(row=0, column=0, pady=10, padx=15, sticky="sen")
@@ -2046,10 +2375,15 @@ def resize_frame_creation(frame):
     interpolation_combobox.grid(row=0, column=5, pady=10, padx = 10, sticky="wn", columnspan=2)
     
     # Button for resize the images
-    resize_images_btn = ctk.CTkButton(master=frame, text="Redimensionar Imágenes", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
-    resize_images_btn.grid(row=0, column=7, pady=10, padx = 10, sticky="wn", columnspan=2)
-    resize_images_btn.configure(command= lambda: resize_images(width_entry.get(), height_entry.get(), interpolation_combobox.get()))
-    resize_images_btn.configure(state="disabled") 
+    if not for_training:
+        resize_images_btn = ctk.CTkButton(master=frame, text="Redimensionar Imágenes", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+        resize_images_btn.grid(row=0, column=7, pady=10, padx = 10, sticky="wn", columnspan=2)
+        resize_images_btn.configure(command= lambda: resize_images(width_entry.get(), height_entry.get(), interpolation_combobox.get()))
+        resize_images_btn.configure(state="disabled") 
+    
+    if for_treatment:
+        resize_images_btn.configure(command= lambda: resize_treatment_images(width_entry.get(), height_entry.get(), interpolation_combobox.get()))
+        resize_images_btn.configure(state="normal")
     
     return frame
 
@@ -2073,6 +2407,430 @@ def finish_data_input():
         
     train_frame_creation(image_training_frame, num_excercise=0, row=10, is_for_image=True)
 
+def test_image_frame_creation(master):
+    global data_test_json, weights_test_json, num_excercise, data_train_json, image_frame, treated_image_frame, image_status_lbl, \
+        categories_frame, kernel_combobox, load_kernel_btn, pre_treated_check, status_kernel_lbl, weights_status_lbl, load_weights_btn, \
+        result_lbl
+        
+    test_frame = ctk.CTkScrollableFrame(master=master, corner_radius=0, fg_color="#11371A",scrollbar_button_color="#112f16", scrollbar_button_hover_color="#446249")
+    test_frame.grid(row=0, column=2, sticky="nsew", columnspan=12, rowspan=12)
+    test_frame = grid_setup(test_frame)
+
+    # Title of the test
+    title_txt = "Sección de Pruebas para Imagenes"
+    title = ctk.CTkLabel(master=test_frame, text=title_txt, font=("Arial", 20, "bold"), text_color="#fbe122", anchor="center", justify="center")
+    title.grid(row=0, column=0, pady=10, sticky="new", columnspan=11)
+
+    # Button for show information about the process
+    info_btn = ctk.CTkButton(master=test_frame, text="Ayuda", fg_color="#0364b8", width=100, height=40, font=("Arial", 13, "bold"), hover_color="#033663", text_color="#fbe122")
+    info_btn.grid(row=0, column=11, pady=10, sticky="en")
+    info_btn.configure(command= lambda: show_info_image_test())
+
+    # Button for load the image
+    load_folder_btn = ctk.CTkButton(master=test_frame, text="Cargar Imágen", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    load_folder_btn.grid(row=1, column=0, pady=10, padx=20, sticky="wn", columnspan=2)
+    load_folder_btn.configure(command= lambda: load_test_image())
+    
+    # Label for the status of the image charge
+    image_status_lbl = ctk.CTkLabel(master=test_frame, text="Imagen No Cargada", font=("Arial", 18, "bold"), text_color="red")
+    image_status_lbl.grid(row=1, column=2, pady=10, sticky="n", columnspan=3)
+    
+    # chargue the resize section
+    resize_frame = ctk.CTkFrame(master=test_frame, corner_radius=8, fg_color="#11371A")
+    resize_frame = resize_frame_creation(resize_frame, for_training = True)
+    resize_frame.grid(row=2, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
+    
+    # label for entry a category response option
+    response_lbl = ctk.CTkLabel(master=test_frame, text="Ingresar posible Categoría:", font=("Arial", 16, "bold"), text_color="#fbe122")
+    response_lbl.grid(row=3, column=0, pady=10, padx=15, sticky="sen", columnspan=3)
+    
+    # Entry for the response of the category
+    response_entry = ctk.CTkEntry(master=test_frame, width=200, font=("Arial", 14, "bold"))
+    response_entry.grid(row=3, column=3, pady=10, padx = 10, sticky="swen", columnspan=2)
+    
+    # Button for add the category
+    add_category_btn = ctk.CTkButton(master=test_frame, text="Agregar Categoría", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    add_category_btn.grid(row=3, column=5, pady=10, padx=15, sticky="wn", columnspan=2)
+    add_category_btn.configure(command= lambda: add_test_category(response_entry.get()))
+    
+    # Button for delete a category
+    delete_category_btn = ctk.CTkButton(master=test_frame, text="Eliminar Categoría", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    delete_category_btn.grid(row=3, column=7, pady=10, padx=15, sticky="wn", columnspan=2)
+    delete_category_btn.configure(command= lambda: delete_test_category(response_entry.get()))
+    
+    # Checkbox for the selection of default categories
+    default_categories_check = ctk.CTkCheckBox(master=test_frame, text="Categorías por defecto", font=("Arial", 14, "bold"), text_color="#fbe122")
+    default_categories_check.grid(row=3, column=9, pady=10, padx=15, sticky="sen", columnspan=2)
+    default_categories_check.configure(command= lambda: check_default_categories(default_categories_check))
+    
+    # Scrollable frame for the categories
+    categories_frame = ctk.CTkScrollableFrame(master=test_frame, corner_radius=8, fg_color="#ffffff", height=300)
+    categories_frame.grid(row=4, column=0, sticky="nsew", columnspan=4, pady=10, padx=10)
+    categories_frame = grid_setup(categories_frame)
+    
+    # Add the label title for the categories
+    title_categories = ctk.CTkLabel(master=categories_frame, text="Categorías", font=("Arial", 16, "bold"), text_color="#11371A", anchor="center", justify="center")
+    title_categories.grid(row=0, column=0, pady=10, sticky="new", columnspan=12)
+    
+    kernels_frame = ctk.CTkFrame(master=test_frame, corner_radius=8, fg_color="#11371A")
+    kernels_frame = grid_setup(kernels_frame)
+    kernels_frame.grid(row=4, column=4, sticky="nsew", columnspan=8, pady=10, padx=10)
+    
+    # Label for the kernel series section
+    kernel_series_lbl = ctk.CTkLabel(master=kernels_frame, text="Carga de Kernels", font=("Arial", 16, "bold"), text_color="#fbe122")
+    kernel_series_lbl.grid(row=0, column=0, pady=10, padx=15, sticky="swn", columnspan=12)
+    
+    # Combobox for the selection of the kernel seriesw
+    kernel_combobox = ctk.CTkComboBox(master=kernels_frame, values=kernel_series, width=200, height=40, font=("Arial", 13, "bold"), fg_color="#fbe122", text_color="#0F1010")
+    kernel_combobox.grid(row=1, column=0, pady=10, padx = 10, sticky="sewn", columnspan=3)
+    kernel_combobox.configure(command = select_kernel_series)
+    
+    # Button for load a kernel series
+    load_kernel_btn = ctk.CTkButton(master=kernels_frame, text="Cargar Serie de Kernels", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    load_kernel_btn.grid(row=2, column=0, padx = 15 , pady=10, sticky="swn", columnspan=2)
+    load_kernel_btn.configure(command= lambda: load_kernel_series())
+    
+    # Checkbox for the selection of the pre-treated images
+    pre_treated_check = ctk.CTkCheckBox(master=kernels_frame, text="Imágenes Pretratadas", font=("Arial", 14, "bold"), text_color="#fbe122")
+    pre_treated_check.grid(row=3, column=0, pady=10, padx=15, sticky="sewn", columnspan=2)
+    pre_treated_check.configure(command= lambda: check_pre_treated(pre_treated_check))
+    
+    # Label for the status of the kernel series
+    status_kernel_lbl = ctk.CTkLabel(master=kernels_frame, text="Kernel No Cargado", font=("Arial", 14, "bold"), text_color="#fbe122")
+    status_kernel_lbl.grid(row=4, column=0, pady=10, padx=15, sticky="swn", columnspan=2)
+    
+    # Button for load the weights of the model
+    load_weights_btn = ctk.CTkButton(master=test_frame, text="Cargar Pesos", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    load_weights_btn.grid(row=5, column=0, pady=10, padx=15, sticky="wn", columnspan=2)
+    load_weights_btn.configure(command= lambda: charge_test_images_weights())
+    
+    # Checkbox for the selection of the default weights
+    default_weights_check = ctk.CTkCheckBox(master=test_frame, text="Pesos por defecto", font=("Arial", 14, "bold"), text_color="#fbe122")
+    default_weights_check.grid(row=5, column=2, pady=10, padx=15, sticky="sen", columnspan=2)
+    default_weights_check.configure(command= lambda: charge_default_weights(default_weights_check))
+    
+    # Label for the status of the weights
+    weights_status_lbl = ctk.CTkLabel(master=test_frame, text="Pesos No Cargados", font=("Arial", 14, "bold"), text_color="#fbe122")
+    weights_status_lbl.grid(row=5, column=4, pady=10, padx=15, sticky="sen", columnspan=2)
+    
+    
+    images_frame = ctk.CTkFrame(master=test_frame, corner_radius=8, fg_color="#11371A")
+    images_frame = grid_setup(images_frame)
+    images_frame.grid(row=6, column=0, sticky="nw", columnspan=12, pady=10, padx=10)
+    
+    # frame with a border radius (is for the chargued image) height 500px
+    image_frame = ctk.CTkFrame(master=images_frame, corner_radius=8, fg_color="#11371A", border_width=2, border_color="#fbe122")
+    image_frame = grid_setup(image_frame)
+    image_frame.grid(row=6, column=0, sticky="ne", columnspan=6, pady=10, padx=10)    
+
+    # Label for the chargued image
+    image_lbl = ctk.CTkLabel(master=image_frame, text="Imagen Cargada", font=("Arial", 16, "bold"), text_color="#fbe122")
+    image_lbl.grid(row=0, column=0, pady=10, padx=10, sticky="new", columnspan=12)
+
+    # frame with a border radius (is for the treated image) height 500px 
+    treated_image_frame = ctk.CTkFrame(master=images_frame, corner_radius=8, fg_color="#11371A", border_width=2, border_color="#fbe122")
+    treated_image_frame = grid_setup(treated_image_frame)
+    treated_image_frame.grid(row=6, column=6, sticky="nw", columnspan=6, pady=10, padx=10)
+    
+    # Label for the treated image
+    treated_image_lbl = ctk.CTkLabel(master=treated_image_frame, text="Imagen Tratada", font=("Arial", 16, "bold"), text_color="#fbe122", anchor="center", justify="center")
+    treated_image_lbl.grid(row=0, column=0, pady=10, padx=10, sticky="new", columnspan=12)
+    
+    # Button for start the test process
+    start_test_btn = ctk.CTkButton(master=test_frame, text="Empezar Prueba", fg_color="#fbe122", width=180, height=40, font=("Arial", 13, "bold"), hover_color="#E2B12F", text_color="#0F1010")
+    start_test_btn.grid(row=7, column=0, pady=10, padx=15, sticky="wn", columnspan=2)
+    start_test_btn.configure(command= lambda: start_image_test())
+    
+    # Label for the result
+    result_lbl = ctk.CTkLabel(master=test_frame, text="Resultado:", font=("Arial", 16, "bold"), text_color="#fbe122", anchor="center", justify="center")
+    result_lbl.grid(row=7, column=2, pady=10, padx=15, sticky="sen", columnspan=4)
+
+def load_test_image():
+    global image_frame, image_status_lbl, test_image, test_filtered_image
+    
+    image = load_images(False)
+    
+    if image is None or len(image) == 0:
+        image_status_lbl.configure(text="Error al cargar la imagen", text_color="red")
+        return
+    
+    if len(image) > 1:
+        image_status_lbl.configure(text="Debe cargar solo una imagen", text_color="red")
+        return
+    
+    # Create the test image copy without any modification for presentation
+    test_image = image[0].copy()
+    image = image[0]
+    
+    width = image.shape[1]
+    height = image.shape[0]
+    
+    image_info = f"Resolución:\n Alto: {height} - Ancho: {width} - Canales de Color: {image.shape[2]}"
+      
+    if image.shape[1] > 500:
+        aspect_ratio = 500 / float(image.shape[1])
+        ne_height = int(image.shape[0] * aspect_ratio)
+        image = resize_image(image, 500, ne_height, "Bicubic")
+        width = image.shape[1]
+        height = image.shape[0]
+        image_info += f"\n\nResolución ajustada (Solo para visualización):\n Alto: {height} - Ancho: {width} - Canales de Color: {image.shape[2]}\n"
+    
+    if test_image.shape[0] > 1500 or test_image.shape[1] > 1500:
+        test_image = image.copy()
+    
+    print("width: ", width, "height: ", height)
+    image = Image.fromarray(image)
+    image = ctk.CTkImage(dark_image=image, light_image=image, size=(width, height))
+    
+    image_lbl = ctk.CTkLabel(master=image_frame, image=image , text=image_info, compound="bottom", font=("Arial", 16, "bold"), text_color="#fbe122", anchor="center")
+    image_lbl.grid(row=1, column=0, pady=10, padx=10, sticky="nsew")
+    
+    image_status_lbl.configure(text="Imagen Cargada", text_color="green")
+    image_frame.configure(width = 500)
+    
+    test_filtered_image = None
+    
+def add_test_category(category):
+    global categories_frame, test_categories, txt_categories
+
+    if category == "":
+        show_default_error("Debe ingresar una categoría")    
+        return
+    
+    if category in test_categories:
+        show_default_error("La categoría ya existe")
+        return
+    
+    test_categories.append(category)
+    
+    # Create a textbox with the categories
+    txt_categories = ctk.CTkTextbox(master=categories_frame, width=600, fg_color="#ffffff")
+    txt_categories.grid(row=1, column=0, pady=5, padx=2, sticky="nsew")
+    
+    txt_categories.tag_config("title", cnf = {"font": title_font}, foreground="#11371a")
+    txt_categories.tag_config("subtitle", cnf = {"font": subtitle_font}, foreground="#70600f")
+    txt_categories.tag_config("pattern", cnf = {"font": text_font}, foreground="#70600f")
+    
+    txt_categories.delete("1.0", "end")
+    
+    for category in test_categories:
+        index = test_categories.index(category)
+        txt_categories.insert("end", f"{index} - {category}\n", "title")  
+
+def delete_test_category(category):
+    global categories_frame, test_categories, txt_categories
+
+    if category == "":
+        show_default_error("Debe ingresar una categoría")
+        return
+    
+    if category not in test_categories:
+        show_default_error("La categoría no existe")
+        return
+        
+    test_categories.remove(category)
+    
+    # Create a textbox with the categories
+    txt_categories = ctk.CTkTextbox(master=categories_frame, width=600, fg_color="#ffffff")
+    txt_categories.grid(row=1, column=0, pady=5, padx=2, sticky="nsew")
+
+    txt_categories.tag_config("title", cnf = {"font": title_font}, foreground="#11371a")
+    
+    txt_categories.delete("1.0", "end")
+    
+    for category in test_categories:
+        index = test_categories.index(category)
+        txt_categories.insert("end", f"{index} - {category}\n", "title")  
+
+def check_default_categories(check):
+    global categories_frame, test_categories, default_test_categories, txt_categories
+
+    checked = True if check.get() == 1 else False
+
+    if not checked:
+        test_categories = []
+        txt_categories.delete("1.0", "end")
+        
+    if checked:
+        test_categories = default_test_categories
+        
+        # Create a textbox with the categories
+        txt_categories = ctk.CTkTextbox(master=categories_frame, width=600, fg_color="#ffffff")
+        txt_categories.grid(row=1, column=0, pady=5, padx=2, sticky="nsew")
+        
+        txt_categories.tag_config("title", cnf = {"font": title_font}, foreground="#11371a")
+        txt_categories.tag_config("subtitle", cnf = {"font": subtitle_font}, foreground="#70600f")
+        txt_categories.tag_config("pattern", cnf = {"font": text_font}, foreground="#70600f")
+        
+        txt_categories.delete("1.0", "end")
+        
+        for category in test_categories:
+            index = test_categories.index(category)
+            txt_categories.insert("end", f"{index} - {category}\n", "title")  
+
+def charge_default_weights(check):
+    global weights_status_lbl, weights_test_json
+    
+    if check.get() == 1:
+        weights_test_json = load_json("case_5/base_5_weights")
+        weights_status_lbl.configure(text="Pesos Cargados", text_color="green")
+        return
+    
+    if check.get() == 0:
+        weights_test_json = None
+        weights_status_lbl.configure(text="Pesos No Cargados", text_color="red")
+        return 
+
+def charge_test_images_weights():
+    global weights_status_lbl, weights_test_json
+    
+    weights, filename = load_json()
+
+    if weights is None:
+        weights_status_lbl.configure(text="Error al cargar los pesos", text_color="red")
+        return
+    
+    weights_test_json = weights
+    
+    weights_status_lbl.configure(text=f"Pesos {filename} Cargados", text_color="green")
+
+def start_image_test():
+    global test_image, treated_image_frame, test_categories, weights_test_json, result_lbl, selected_kernel_series,\
+        width_entry, height_entry, interpolation_combobox, test_filtered_image
+
+    result_lbl.configure(text=f"Resultado: ")
+
+    if test_image is None:
+        show_default_error("Debe cargar una imagen")
+        return
+    
+    if len(test_categories) < 1:
+        show_default_error("Debe ingresar al menos dos categorías")
+        return
+    
+    if weights_test_json is None:
+        show_default_error("Debe cargar los pesos")
+        return
+    
+    if selected_kernel_series is None:
+        show_default_error("Debe cargar o seleccionar una serie de kernels")
+        return
+
+    image = None
+    if test_filtered_image is None:
+        print("kernel series", selected_kernel_series)
+        image = apply_kernel_series([test_image], selected_kernel_series) if selected_kernel_series != "None" else [test_image]
+        image = image[0]
+        test_filtered_image = image
+    else:
+        image = test_filtered_image
+        
+    if image is None or len(image) < 1:
+        show_default_error("Error al aplicar los kernels")
+        return
+    
+    width = image.shape[1]  
+    height = image.shape[0]
+
+    temp_image = image.copy()
+
+    image_info = f"Resolución:\n Alto: {height} - Ancho: {width} - Canales de Color: {image.shape[2]}"
+    
+    if image.shape[1] > 500:
+        aspect_ratio = 500 / float(image.shape[1])
+        ne_height = int(image.shape[0] * aspect_ratio)
+        temp_image = resize_image(image, 500, ne_height, "Bicubic")
+        width = temp_image.shape[1]
+        height = temp_image.shape[0]
+        image_info += f"\n\nResolución ajustada (Solo para visualización):\n Alto: {height} - Ancho: {width} - Canales de Color: {temp_image.shape[2]}\n"
+        
+    temp_image = Image.fromarray(temp_image)
+    temp_image = ctk.CTkImage(dark_image=temp_image, light_image=temp_image, size=(width, height))
+
+    treated_image_lbl = ctk.CTkLabel(master=treated_image_frame, image=temp_image , text=image_info, compound="bottom", font=("Arial", 16, "bold"), text_color="#fbe122", anchor="center")
+    treated_image_lbl.grid(row=1, column=0, pady=10, padx=10, sticky="nsew", columnspan=12)
+    
+    # Resize the image for the model
+    
+    selected_width = width_entry.get()
+    selected_height = height_entry.get()
+    
+    image_plained = plain_image(image)
+    redimension = False
+    
+    
+    tam_image_desired = len(weights_test_json["weights_h"][0])
+    print("tam_image_desired: ", tam_image_desired)
+    print("len(image_plained): ", len(image_plained))
+    
+    if len(image_plained) != tam_image_desired:
+        show_default_error(f"La imagen será redimensionada porque debe tener un tamaño plano de {tam_image_desired} y tiene {len(image_plained)}")
+        redimension = True
+    
+    if redimension and (selected_width == "" or selected_height == ""):
+        show_default_error("Debe ingresar el ancho y el alto, no se redimensionará la imagen")
+        return
+    
+    if redimension and not (selected_width.isdigit() or not selected_height.isdigit()):
+        show_default_error("El ancho y el alto deben ser números enteros, no se redimensionará la imagen")
+        return
+    
+    if redimension and interpolation_combobox.get() == "":
+        show_default_error("Debe seleccionar una interpolación, no se redimensionará la imagen")
+    
+    if redimension:
+        image = resize_image(image, int(width_entry.get()), int(height_entry.get()), interpolation_combobox.get())
+    
+    image_info += f"\nRedimensionada:\n Alto: {image.shape[0]} - Ancho: {image.shape[1]} - Canales de Color: {image.shape[2]}"
+    temp_image = Image.fromarray(image)
+    temp_image = ctk.CTkImage(dark_image=temp_image, light_image=temp_image, size=(image.shape[1], image.shape[0]))
+    treated_image_lbl.configure(text=image_info, image=temp_image)
+    
+    image = plain_image(image)
+        
+    if len(image) != tam_image_desired:
+        show_default_error(f"La imagen tratada debe tener un tamaño plano de {tam_image_desired} y tiene {len(image)} \n"+ 
+                           "No se realizará la prueba, Cambie el tamaño de la imagen")
+        return
+    
+    print("First 5 elements of the image: ", image[:5])
+    
+    image = normalize_image_vector(image)
+    
+    print("First 5 elements of the image normalized: ", image[:5])
+    
+    print("10 first weights of the first neuron in the h layer: ", weights_test_json["weights_h"][0][:10])
+    print("10 first weights of the first neuron in the o layer: ", weights_test_json["weights_o"][0][:10])
+    print("First 5 elements of the bias of the h layer: ", weights_test_json["bias_h"][:5])
+    print("First 5 elements of the bias of the o layer: ", weights_test_json["bias_o"][:5])
+    print("qty_neurons: ", weights_test_json["qty_neurons"])
+    print("arquitecture: ", weights_test_json["arquitecture"])
+    
+    
+    test_data = {
+        "inputs": [image],
+        "outputs": 0,
+        "weights_h": weights_test_json["weights_h"],
+        "weights_o": weights_test_json["weights_o"],
+        "bias_h": weights_test_json["bias_h"],
+        "bias_o": weights_test_json["bias_o"],
+        "qty_neurons": weights_test_json["qty_neurons"],
+        "function_h_name": weights_test_json["function_h_name"],
+        "function_o_name": weights_test_json["function_o_name"],
+        "arquitecture": weights_test_json["arquitecture"]
+    }
+    
+    results, errors = test_neural_network(test_data, normalize = False, output = False)
+
+    print("results: ", results)
+    
+    if results is None or len(results) < 1:
+        show_default_error("Error durante la prueba")
+        return
+    
+    
+    result_category = test_categories[int(results[0][0])]
+    result_lbl.configure(text=f"Resultado: {results[0]} = {result_category}")
 
 def show_info_image_training():
     global info_window
@@ -2195,7 +2953,7 @@ def show_info_image_training():
     desc6 = ctk.CTkLabel(master=info_frame, text=desc6_txt, font=("Arial", 14), text_color="#fbe122", anchor="center", justify="center", wraplength=600)
     desc6.grid(row=14, column=0, pady=10, sticky="new", columnspan=12)
 
-def show_treatment_info(kernel_name, stride, padding, percentaje, qty_images):
+def show_treatment_info(kernel_json, qty_images):
     global info_window
     
     if info_window is not None:
@@ -2208,34 +2966,22 @@ def show_treatment_info(kernel_name, stride, padding, percentaje, qty_images):
     icon_path = get_resource_path("Resources/brand_logo.ico")
     info_window.iconbitmap(icon_path)
     info_window = grid_setup(info_window)
-    info_window.geometry("800x600")
+    info_window.geometry("600x500")
     info_window.resizable(False, False)
     info_window.attributes("-topmost", True)
     
     # Label for main info
-    main_info = "Se empezo un proceso de tratamiento de imágenes, Esto puede tardar un poco, Sea paciente. \n PROCESO: "
+    main_info = "Se empezo un proceso de tratamiento de imágenes, Esto puede tardar un poco, Sea paciente. \n\n PROCESO: \n"
     main_info_lbl = ctk.CTkLabel(master=info_window, text=main_info, font=("Arial", 20, "bold"), text_color="#fbe122", anchor="center", justify="center", wraplength=600)
     main_info_lbl.grid(row=0, column=0, pady=10, sticky="new", columnspan=12)
     
-    # Label for the kernel name
-    kernel_name_lbl = ctk.CTkLabel(master=info_window, text=f"Kernel: {kernel_name}", font=("Arial", 16, "bold"), text_color="#fbe122", anchor="center", justify="center")
-    kernel_name_lbl.grid(row=1, column=0, pady=10, sticky="new", columnspan=12)
+    kernel_json_txt = f"Se aplicará la serie de kernels: \n {json.dumps(kernel_json, indent=2)}"
+    kernel_json_lbl = ctk.CTkLabel(master=info_window, text=kernel_json_txt, font=("Arial", 16, "bold"), text_color="#fbe122", anchor="center", justify="center", wraplength=600)
+    kernel_json_lbl.grid(row=1, column=0, pady=10, sticky="new", columnspan=12)   
     
-    # Label for the stride
-    stride_lbl = ctk.CTkLabel(master=info_window, text=f"Stride: {stride}", font=("Arial", 16, "bold"), text_color="#fbe122", anchor="center", justify="center")
-    stride_lbl.grid(row=2, column=0, pady=10, sticky="new", columnspan=12)
-    
-    # Label for the padding
-    padding_lbl = ctk.CTkLabel(master=info_window, text=f"Padding: {padding}", font=("Arial", 16, "bold"), text_color="#fbe122", anchor="center", justify="center")
-    padding_lbl.grid(row=3, column=0, pady=10, sticky="new", columnspan=12)
-    
-    # Label for the percentaje
-    percentaje_lbl = ctk.CTkLabel(master=info_window, text=f"Percentaje: {percentaje}", font=("Arial", 16, "bold"), text_color="#fbe122", anchor="center", justify="center")
-    percentaje_lbl.grid(row=4, column=0, pady=10, sticky="new", columnspan=12)
-    
-    # Label for the quantity of images
-    qty_images_lbl = ctk.CTkLabel(master=info_window, text=f"Número de imágenes siendo procesadas: {qty_images}", font=("Arial", 16, "bold"), text_color="#fbe122", anchor="center", justify="center")
-    qty_images_lbl.grid(row=5, column=0, pady=10, sticky="new", columnspan=12)
+    num_images_txt = f"Se tratarán {qty_images} imágenes"
+    num_images_lbl = ctk.CTkLabel(master=info_window, text=num_images_txt, font=("Arial", 16, "bold"), text_color="#fbe122", anchor="center", justify="center", wraplength=600)
+    num_images_lbl.grid(row=2, column=0, pady=10, sticky="new", columnspan=12)
     
     info_window.update()    
     info_window.after(5000, lambda: info_window.destroy())
@@ -2274,6 +3020,39 @@ def show_info_resize_images(error=None, main_info=True):
         error_lbl = ctk.CTkLabel(master=info_frame, text=error, font=("Arial", 16, "bold"), text_color="red", anchor="center", justify="center", wraplength=600)
         error_lbl.grid(row=1, column=0, pady=10, sticky="new", columnspan=12)
 
+    info_window.update()
+
+def show_info_image_test():
+    pass 
+
+def show_default_error(error = ""):
+    global info_window
+    
+    if info_window is not None:
+        info_window.destroy()
+    
+    # Create a CtkToplevel window with some labels with info
+    info_window = ctk.CTkToplevel()
+    info_window.title("Error")
+    icon_path = get_resource_path("Resources/brand_logo.ico")
+    info_window.iconbitmap(icon_path)
+    info_window = grid_setup(info_window)
+    info_window.geometry("400x300")
+    info_window.resizable(False, False)
+    info_window.attributes("-topmost", True)
+    
+    # Create scrollable frame
+    info_frame = ctk.CTkScrollableFrame(master=info_window, corner_radius=0)
+    info_frame.grid(row=0, column=0, sticky="nsew", columnspan=12, rowspan=12)
+    info_frame = grid_setup(info_frame)
+    
+    # Label for the error
+    error_lbl = ctk.CTkLabel(master=info_frame, text=error, font=("Arial", 16, "bold"), text_color="red", anchor="center", justify="center", wraplength=400)
+    error_lbl.grid(row=0, column=0, pady=10, sticky="nsew", columnspan=12)
+    
+    info_window.after(5000, lambda: info_window.destroy())
+    info_window.wait_window()
+    
     info_window.update()
 
 if __name__ == "__main__":

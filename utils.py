@@ -65,7 +65,7 @@ def load_json(filename = None, extension = ".json", directory = "Data"):
             with open(file, 'r') as file:
                 content = json.load(file)
                 data_json = content
-                print(f"Contenido del JSON cargado", data_json)
+                print(f"Contenido del JSON cargado")
             return data_json, file_name
         else:
             return None, None

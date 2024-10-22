@@ -4,13 +4,13 @@
             "name": "5x5_Sharpen",
             "stride": 1,
             "padding": 0,
-            "percentaje": 10.0
+            "type": "kernel"
         },
         {
-            "name": "5x5_Gaussian Blur",
-            "stride": 2,
+            "name": "3x3_Gaussian Blur",
+            "stride": 1,
             "padding": 0,
-            "percentaje": 10.0
+            "type": "kernel"
         }
     ]
 }

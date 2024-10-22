@@ -2,7 +2,9 @@ import cv2
 from utils import get_resource_path
 from tkinter import filedialog # Import the filedialog module to open file dialogs
 import os
-import numpy as np # SOLO PARA CONVERTIR LA IMAGEN EN UN FORMATO QUE CUSTOMTKINTER PUEDA MOSTRAR EN UN LABEL
+import numpy as np 
+import matplotlib.pyplot as plt
+
 
 def load_images(is_folder):
     """
@@ -27,7 +29,8 @@ def load_images(is_folder):
                     if img is not None:
                         images.append(img)
         else:
-            img_path = filedialog.askopenfilename(filetypes=[("Image files", "*.png;*.jpg")])
+            img_path = filedialog.askopenfilename(filetypes=[("Image files", "*.png;*.jpg;*.jpeg;*.bmp;*.ppm;*.pgm;*.pbm;*.webp")]
+)
             if img_path:
                 img = cv2.imread(img_path)
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  
@@ -38,7 +41,7 @@ def load_images(is_folder):
         print("Error loading images: ", e)
         return images
 
-def apply_kernel(image, kernel, padding=0, stride=1):
+def apply_kernel_normal(image, kernel, padding=0, stride=1):
     """
     Aplica un kernel 3x3 o 5x5 sobre una imagen con padding y stride definidos.
     
@@ -105,6 +108,57 @@ def apply_kernel(image, kernel, padding=0, stride=1):
     print("Imagen correctamente convulsionada")
 
     return output_image_array  # Devolver la imagen convertida en formato array
+
+def apply_kernel(image, kernel, padding=0, stride=1):
+    """
+    Aplica un kernel sobre una imagen con padding y stride definidos utilizando numpy.
+    
+    Args:
+        image: La imagen en formato BGR.
+        kernel: El kernel (matriz) de tamaño variable (3x3, 5x5, etc.).
+        padding: Cantidad de padding a añadir a la imagen.
+        stride: El número de píxeles que se avanza después de aplicar el kernel.
+        
+    Returns:
+        La imagen convolucionada en formato compatible con Image.fromarray().
+    """
+    # Dimensiones de la imagen y del kernel
+    image_height, image_width, _ = image.shape
+    kernel_size = len(kernel)  # Asumimos kernel cuadrado (3x3, 5x5, etc.)
+    
+    # Aplicar padding a la imagen
+    if padding > 0:
+        padded_image = np.pad(image, ((padding, padding), (padding, padding), (0, 0)), mode='constant', constant_values=0)
+    else:
+        padded_image = image
+
+    # Dimensiones de la imagen después de aplicar padding
+    padded_height, padded_width, _ = padded_image.shape
+
+    # Dimensiones de la salida
+    output_height = (padded_height - kernel_size) // stride + 1
+    output_width = (padded_width - kernel_size) // stride + 1
+
+    # Inicializar imagen de salida
+    output_image = np.zeros((output_height, output_width, 3), dtype=np.float32)
+
+    # Invertir el kernel para la convolución
+    kernel_flipped = np.flip(kernel)
+
+    # Aplicar la convolución
+    for y in range(0, output_height):
+        for x in range(0, output_width):
+            # Extraer la región de la imagen que corresponde al kernel
+            region = padded_image[y*stride:y*stride+kernel_size, x*stride:x*stride+kernel_size]
+            
+            # Realizar la convolución en los tres canales (BGR)
+            for c in range(3):  # Iterar sobre los canales BGR
+                output_image[y, x, c] = np.sum(region[:, :, c] * kernel_flipped)
+
+    # Clipping de los valores para mantenerlos en el rango [0, 255]
+    output_image = np.clip(output_image, 0, 255).astype(np.uint8)
+
+    return output_image
 
 def get_kernel(name = 'rgb_to_bgr', p = 0):
     
@@ -423,11 +477,6 @@ def get_kernel(name = 'rgb_to_bgr', p = 0):
             [2,  4,  0, -4, -2],
             [1,  2,  0, -2, -1]
         ],
-        "3x3_less_white": [
-            [p/256, p/256, p/256],
-            [p/256, p/256, p/256],
-            [p/256, p/256, p/256]
-        ],
         "less_blue": reduce_blue,
         "less_green":reduce_green,
         "less_red": reduce_red,
@@ -440,6 +489,11 @@ def get_kernel(name = 'rgb_to_bgr', p = 0):
         "gray_to_bgr": gray_to_bgr,
         "rgb_to_gray": rgb_to_gray,
         "bgr_to_gray": bgr_to_gray,
+        "rotate_image": rotate_image,
+        "apply_colormap": apply_colormap,
+        "compress_image": compress_image_dct,
+        "resize_image": resize_image,
+        "binarize_image": binarize_image
     }
     
     return kernels[name]
@@ -548,7 +602,8 @@ def download_images(tag_name, images):
         try:
             for i, img in enumerate(images):
                 # Save the image
-                cv2.imwrite(f"{folder}/{tag_name}_{i}.png", img)
+                bgr_image = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(f"{folder}/{tag_name}_{i}.png", bgr_image)
         except Exception as e:
             print("Error saving the images", e) 
             
@@ -592,7 +647,7 @@ def normalize_image_vector(image_vector):
         
     return image_vector
 
-def resize_image(image, width, height, interpolation):
+def resize_image(image, width, height, interpolation = "Bicubic"):
     """
     Resize an image.
     
@@ -641,3 +696,164 @@ def resize_image(image, width, height, interpolation):
     print(f"Resized image shape: {image_resized.shape}")
     
     return image_resized
+
+def rotate_image(image, angle):
+    """
+    Rotates the input image by the specified angle.
+    
+    Args:
+        image (np.array): Input image as a numpy array.
+        angle (float): Angle in degrees to rotate the image.
+        
+    Returns:
+        np.array: Rotated image.
+    """
+    
+    temp_image = image.copy()
+     
+    # Get image dimensions
+    (h, w) = temp_image.shape[:2]
+    
+    # Find the center of the image
+    center = (w // 2, h // 2)
+    
+    # Get the rotation matrix
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    
+    # Perform the rotation
+    rotated_image = cv2.warpAffine(temp_image, M, (w, h))
+    
+    return rotated_image
+
+def apply_colormap(image, colormap="JET"):
+    """
+    Applies a colormap to a grayscale image.
+    
+    Args:
+        image (np.array): Input grayscale image.
+        colormap (int): OpenCV colormap to apply.
+        
+    Returns:
+        np.array: Colormap-applied image.
+    """
+    
+    colormaps = {
+        "AUTUMN": cv2.COLORMAP_AUTUMN,
+        "BONE": cv2.COLORMAP_BONE,
+        "JET": cv2.COLORMAP_JET,
+        "WINTER": cv2.COLORMAP_WINTER,
+        "RAINBOW": cv2.COLORMAP_RAINBOW,
+        "OCEAN": cv2.COLORMAP_OCEAN,
+        "SUMMER": cv2.COLORMAP_SUMMER,
+        "SPRING": cv2.COLORMAP_SPRING,
+        "COOL": cv2.COLORMAP_COOL,
+        "HSV": cv2.COLORMAP_HSV,
+        "PINK": cv2.COLORMAP_PINK,
+        "HOT": cv2.COLORMAP_HOT,
+        "PARULA": cv2.COLORMAP_PARULA,
+        "MAGMA": cv2.COLORMAP_MAGMA,
+        "INFERNO": cv2.COLORMAP_INFERNO,
+        "PLASMA": cv2.COLORMAP_PLASMA,
+        "VIRIDIS": cv2.COLORMAP_VIRIDIS,
+        "CIVIDIS": cv2.COLORMAP_CIVIDIS,
+        "TWILIGHT": cv2.COLORMAP_TWILIGHT,
+        "TWILIGHT_SHIFTED": cv2.COLORMAP_TWILIGHT_SHIFTED,
+        "TURBO": cv2.COLORMAP_TURBO,
+        "DEEPGREEN": cv2.COLORMAP_DEEPGREEN
+    }
+    
+    if colormap is None or colormap not in colormaps:
+        print("Invalid colormap")
+        return
+    
+    colormap = colormaps[colormap]
+    
+    # Check if the image is grayscale; if not, convert it
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    # Apply the specified colormap
+    colored_image = cv2.applyColorMap(image, colormap)
+    
+    return colored_image
+
+def get_histogram_data(image):
+    """
+    Computes and returns the histogram data of a single image.
+    
+    Args:
+        image (np.array): Input image.
+        
+    Returns:
+        dict: A dictionary containing histograms for each color channel (RGB or grayscale).
+    """
+    histogram_data = {}
+
+    # Check if the image is colored or grayscale
+    if len(image.shape) == 3:  # Color image
+        colors = ('r', 'g', 'b')
+        for i, col in enumerate(colors):
+            # Compute histogram for each channel
+            hist = cv2.calcHist([image], [i], None, [256], [0, 256])
+            histogram_data[col] = hist
+    else:  # Grayscale image
+        hist = cv2.calcHist([image], [0], None, [256], [0, 256])
+        histogram_data['grayscale'] = hist
+    
+    return histogram_data
+
+def compress_image_dct(image, compression_factor=0.5):
+    """
+    Compresses the image using Discrete Cosine Transform (DCT).
+    
+    Args:
+        image (np.array): Input image.
+        compression_factor (float): Factor to compress, ranges from 0 (high compression) to 1 (low compression).
+        
+    Returns:
+        np.array: Compressed image.
+    """
+    # Convert image to grayscale if it's colored
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    # Convert to float32 for DCT
+    image = np.float32(image) / 255.0
+    
+    # Apply DCT (Discrete Cosine Transform)
+    dct = cv2.dct(image)
+    
+    # Zero out low-value frequencies based on compression factor
+    h, w = dct.shape
+    compressed_dct = np.zeros((h, w), dtype=np.float32)
+    limit_h, limit_w = int(h * compression_factor), int(w * compression_factor)
+    
+    compressed_dct[:limit_h, :limit_w] = dct[:limit_h, :limit_w]
+    
+    # Apply inverse DCT to get compressed image
+    compressed_image = cv2.idct(compressed_dct)
+    
+    # Scale back to 8-bit format
+    compressed_image = np.uint8(compressed_image * 255)
+    
+    return compressed_image
+
+def binarize_image(image, threshold=128):
+    """
+    Converts the input image into a binary image (black and white).
+    
+    Args:
+        image (np.array): Input image.
+        threshold (int): Threshold value for binarization (0-255).
+        
+    Returns:
+        np.array: Binary image (black and white).
+    """
+    # Convert to grayscale if it's a color image
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    # Apply binary thresholding
+    _, binary_image = cv2.threshold(image, threshold, 255, cv2.THRESH_BINARY)
+    
+    return binary_image

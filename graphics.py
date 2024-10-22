@@ -89,7 +89,6 @@ def plot_neural_network_with_labels(layer_sizes, label=True):
                             bbox=dict(facecolor='white', edgecolor='none', alpha=0.9))
     return figure
 
-
 def plot_error_total_by_epoch(errors_total, last_epoch):
     """
     Draw a graph with the total error by epoch.
@@ -104,7 +103,7 @@ def plot_error_total_by_epoch(errors_total, last_epoch):
     ax.grid(True)
 
     # Draw the graph
-    epochs = [(i * 1000) for i in range(1,len(errors_total)-1)]
+    epochs = [(i * 10) for i in range(1,len(errors_total)-1)]
     epochs.insert(0, 0)
     epochs.append(last_epoch)
 
@@ -118,3 +117,47 @@ def plot_error_total_by_epoch(errors_total, last_epoch):
     # Return the figure
     return fig
     
+import matplotlib.pyplot as plt
+
+def plot_histograms(histogram_data_list):
+    """
+    Plots histograms for multiple images using a logarithmic Y-axis scale and returns the figure(s).
+    
+    Args:
+        histogram_data_list (list): List of histogram data dictionaries (output from get_histogram_data function).
+        
+    Returns:
+        matplotlib.figure.Figure or list: Either a single figure with all histograms, or a list of figures.
+    """
+    # Create a subplot for each image's histogram
+    fig, axs = plt.subplots(len(histogram_data_list), 1, figsize=(6, len(histogram_data_list) * 4))
+    
+    # Ensure axs is a list even if there is only one subplot
+    if len(histogram_data_list) == 1:
+        axs = [axs]
+    
+    # Loop through the histogram data and plot each histogram
+    for idx, hist_data in enumerate(histogram_data_list):
+        ax = axs[idx]
+        if 'grayscale' in hist_data:
+            ax.plot(hist_data['grayscale'], color='black')
+            ax.set_title(f'Grayscale Histogram for Image {idx+1}')
+        else:
+            colors = {'r': 'red', 'g': 'green', 'b': 'blue'}
+            for channel, hist in hist_data.items():
+                ax.plot(hist, color=colors[channel])
+            ax.set_title(f'RGB Histogram for Image {idx+1}')
+        
+        # Set axis limits and labels
+        ax.set_xlim([0, 256])
+        ax.set_xlabel('Pixel Value')
+        ax.set_ylabel('Frequency')
+        
+        # Set the y-axis to a logarithmic scale
+        ax.set_yscale('log')
+    
+    # Adjust layout
+    plt.tight_layout()
+    
+    return fig
+

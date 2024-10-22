@@ -1,0 +1,18 @@
+{
+    "kernels": [
+        {
+            "name": "rotate_image",
+            "sub_info": {
+                "angle": 20
+            },
+            "type": "special function"
+        },
+        {
+            "name": "rotate_image",
+            "sub_info": {
+                "angle": 20
+            },
+            "type": "special function"
+        }
+    ]
+}

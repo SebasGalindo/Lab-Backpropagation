@@ -21,12 +21,9 @@ def get_graph_json():
 
 # region Funciones de activación y sus derivadas
 def sigmoid(x):
-    if x > 100:  # Para valores grandes de x
-        return 1
-    elif x < -100:  # Para valores muy pequeños de x
-        return 0
-    else:
-        return 1 / (1 + math.exp(-x))
+    # Clip para evitar problemas numéricos
+    x = np.clip(x, -100, 100)
+    return 1 / (1 + np.exp(-x))
 
 def sigmoid_derivative(x):
     return sigmoid(x) * (1 - sigmoid(x))
@@ -56,18 +53,16 @@ def linear_derivative(x):
     return 1
 
 def softplus(x):
-    if x > 100:  # Aproximación para valores grandes
-        return x
-    else:
-        return math.log(1 + math.exp(x))
+    # Clip para evitar problemas numéricos
+    x = np.clip(x, -100, 100)
+    return np.log(1 + np.exp(x))
+
 
 def softplus_derivative(x):
-    if x > 100:  # Para valores grandes de x
-        return 1
-    elif x < -100:  # Para valores muy pequeños de x
-        return 0
-    else:
-        return 1 / (1 + math.exp(-x))
+    # Limitar el valor de x para evitar problemas con valores extremadamente grandes o pequeños
+    x_clipped = np.clip(x, -100, 100)
+    return 1 / (1 + math.exp(-x_clipped))
+
 
 def elu(x, alpha=1.0):
     return x if x > 0 else alpha * (math.exp(x) - 1)
@@ -128,10 +123,6 @@ def switch_function_output(fuction_name, derivada=False):
         "Swish": {
             "function": swish,
             "derivative": swish_derivative
-        },
-        "softmax": {
-            "function": softmax,
-            "derivative": softmax_derivative
         }
     }
 
@@ -143,6 +134,23 @@ def switch_function_output(fuction_name, derivada=False):
 # endregion
 
 def normalize_data(entradas, salidas):
+    # Convertir entradas y salidas a numpy arrays para facilitar las operaciones
+    entradas = np.array(entradas)
+    salidas = np.array(salidas)
+
+    # Obtener el máximo y mínimo de todas las entradas y salidas
+    maximo_entrada = np.max(entradas)
+    minimo_entrada = np.min(entradas)
+    entradas_n = (entradas - minimo_entrada) / (maximo_entrada - minimo_entrada)
+
+    maximo_salida = np.max(salidas)
+    minimo_salida = np.min(salidas)
+    salidas_n = (salidas - minimo_salida) / (maximo_salida - minimo_salida)
+
+    # Retornar las entradas y salidas normalizadas junto con los máximos y mínimos
+    return entradas_n, salidas_n, maximo_entrada, minimo_entrada, maximo_salida, minimo_salida
+
+def normalize_data_normal(entradas, salidas):
     # Entrada es una matriz [[]] y salida es una matriz [[]]
     # Normalizar las entradas y las salidas
     # hallar el valor máximo y el valor mínimo de las entradas
@@ -388,7 +396,7 @@ def backpropagation_training_normal(train_data = None, errors_text = None , stat
     if not stop_training:
         changue_status_training(status_label, "Entrenamiento finalizado", "green", download_weights_btn, download_training_data_btn, results_btn)
 
-def backpropagation_training(train_data = None, errors_text = None, status_label=None, download_weights_btn = None, download_training_data_btn = None, results_btn = None, main_window=None, normalize=True):
+def backpropagation_training(train_data=None, errors_text=None, status_label=None, download_weights_btn=None, download_training_data_btn=None, results_btn=None, main_window=None, normalize=True):
     from app import update_errors_ui, changue_status_training
     global weights_json, graph_json, stop_training
 
@@ -396,8 +404,9 @@ def backpropagation_training(train_data = None, errors_text = None, status_label
     errores_totales = []
     errores_patrones_registro = []
 
+    # Extraer parámetros de configuración
     funcion_h_nombre = train_data["function_h_name"]
-    funcion_o_nombre = train_data["function_o_name"]  # Obtener el nombre de la función de activación de salida
+    funcion_o_nombre = train_data["function_o_name"]
     neuronas_h_cnt = train_data["qty_neurons"]
     alpha = train_data["alpha"]
     precision = train_data["precision"]
@@ -408,78 +417,66 @@ def backpropagation_training(train_data = None, errors_text = None, status_label
     entradas = np.array(train_data["inputs"])
     salidas_d = np.array(train_data["outputs"])
 
-    # Obtener la cantidad de neuronas de salida
-    neuronas_o_cnt = salidas_d.shape[1]
-
     # Obtener las funciones de activación y sus derivadas
     funcion_h = np.vectorize(switch_function_output(funcion_h_nombre))
     funcion_o = np.vectorize(switch_function_output(funcion_o_nombre))
     funcion_h_derivada = np.vectorize(switch_function_output(funcion_h_nombre, True))
     funcion_o_derivada = np.vectorize(switch_function_output(funcion_o_nombre, True))
 
-    # Verificar si la función de activación de salida es Softmax
-    es_softmax = funcion_o_nombre == "softmax"
-
     # Normalizar entradas y salidas si es necesario
     if normalize:
         entradas, salidas_d, *_ = normalize_data(entradas, salidas_d) 
 
-    # Prevenir entradas extremas (1 -> 0.999 y 0 -> 0.001)
-    entradas = np.clip(entradas, 0.001, 0.999)
-
-    # Crear pesos y bias con numpy
+    # Inicializar pesos y bias con numpy
     pesos_h = np.random.uniform(0.1, 1, (neuronas_h_cnt, entradas.shape[1]))
-    bias_h = np.full(neuronas_h_cnt, bias if bias != 0 else np.random.uniform(0.1, 1))
+    bias_h = np.full(neuronas_h_cnt, bias if bias != 0 else np.random.uniform(-1, 1))
 
-    pesos_o = np.random.uniform(0.1, 1, (neuronas_o_cnt, neuronas_h_cnt))
-    bias_o = np.full(neuronas_o_cnt, bias if bias != 0 else np.random.uniform(0.1, 1))
+    pesos_o = np.random.uniform(0.1, 1, (salidas_d.shape[1], neuronas_h_cnt))
+    bias_o = np.full(salidas_d.shape[1], bias if bias != 0 else np.random.uniform(-1, 1))
 
-    # Inicializar los errores de los patrones en un valor mayor a la precisión
+    # Inicializar errores de patrones
     errores_patrones = np.full(entradas.shape[0], precision + 0.9)
+
+    # Make inputs = 1 -> 0.999 and inputs = 0 -> 0.001
+    for i in range(len(entradas)):
+        for j in range(len(entradas[i])):
+            if entradas[i][j] == 1:
+                entradas[i][j] = 0.999
+            elif entradas[i][j] == 0:
+                entradas[i][j] = 0.001
 
     epoca = 0
     momentum_h = np.zeros_like(pesos_h)
     momentum_o = np.zeros_like(pesos_o)
 
     while np.any(errores_patrones > precision):
-        if epoca % 1 == 0:
+        if epoca % 10 == 0:
             error_total = np.mean(errores_patrones)
             errores_totales.append(error_total)
-            errores_patrones_registro.append(errores_patrones.copy())
+            errores_patrones_registro.append(errores_patrones.copy().tolist())
             main_window.after(0, update_errors_ui, epoca, errores_patrones, error_total, precision, errors_text, main_window, False)
 
         for p in range(entradas.shape[0]):
             x = entradas[p]
             yd = salidas_d[p]
 
-            # Propagación hacia adelante
+            # Forward propagation
             Nethj = np.dot(pesos_h, x) + bias_h
             Yh = funcion_h(Nethj)
 
             Netok = np.dot(pesos_o, Yh) + bias_o
+            Yk = funcion_o(Netok)
 
-            # Si la función de salida es Softmax, aplicar Softmax
-            if es_softmax:
-                Yk = softmax(Netok)  # Usar Softmax en la salida
-            else:
-                Yk = funcion_o(Netok)  # Usar la función de activación estándar
-
-            # Calcular error de salida (delta_o) y error de capa oculta (delta_h)
-            if es_softmax:
-                # Para Softmax, usar la derivada simplificada con Cross-Entropy
-                delta_o = Yk - yd  # Softmax + Cross-Entropy
-            else:
-                # Para otras funciones de activación
-                delta_o = (yd - Yk) * funcion_o_derivada(Yk)
-
+            # Backward propagation
+            delta_o = (yd - Yk) * funcion_o_derivada(Yk)
             delta_h = funcion_h_derivada(Nethj) * np.dot(pesos_o.T, delta_o)
 
-            # Actualización de pesos de la capa de salida
+            # Actualización de pesos capa de salida
             pesos_o += alpha * np.outer(delta_o, Yh) + beta * (pesos_o - momentum_o)
             bias_o += alpha * delta_o
             momentum_o = pesos_o.copy()
 
-            # Actualización de pesos de la capa oculta
+            # Actualización de pesos capa oculta
             pesos_h += alpha * np.outer(delta_h, x) + beta * (pesos_h - momentum_h)
             bias_h += alpha * delta_h
             momentum_h = pesos_h.copy()
@@ -488,7 +485,7 @@ def backpropagation_training(train_data = None, errors_text = None, status_label
             errores_patrones[p] = 0.5 * np.sum((yd - Yk) ** 2)
 
         epoca += 1
-        
+
         if epoca >= iteraciones_max:
             main_window.after(0, changue_status_training, status_label, "Límite de épocas alcanzado", "red", download_weights_btn, download_training_data_btn, results_btn)
             return
@@ -498,17 +495,22 @@ def backpropagation_training(train_data = None, errors_text = None, status_label
             return
 
     errores_totales.append(np.mean(errores_patrones))
-    errores_patrones_registro.append(errores_patrones.copy())
+    errores_patrones_registro.append(errores_patrones.copy().tolist())
 
     main_window.after(0, update_errors_ui, epoca, errores_patrones, np.mean(errores_patrones), precision, errors_text, main_window, True)
 
+    # save only the 10k weights in graph json if the weights are more than 10k
+    weights_h_graph = pesos_h if pesos_h.shape[0] <= 10000 else pesos_h[:10000]
+    weights_o_graph = pesos_o if pesos_o.shape[0] <= 10000 else pesos_o[:10000]
+
+    # Almacenar pesos y errores
     graph_json = {
         "training_date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "epochs": epoca,
         "max_epochs": iteraciones_max,
         "initial_bias": bias,
         "qty_neurons": neuronas_h_cnt,
-        "arquitecture": [entradas.shape[1], neuronas_h_cnt, neuronas_o_cnt],
+        "arquitecture": [entradas.shape[1], neuronas_h_cnt, salidas_d.shape[1]],
         "function_h": funcion_h_nombre,
         "function_o": funcion_o_nombre,
         "momentum": MOMENTUM,
@@ -517,8 +519,8 @@ def backpropagation_training(train_data = None, errors_text = None, status_label
         "precision": precision,
         "totals_errors": errores_totales,
         "patterns_errors": errores_patrones_registro,
-        "weights_h": pesos_h.tolist(),
-        "weights_o": pesos_o.tolist(),
+        "weights_h": weights_h_graph.tolist(),
+        "weights_o": weights_o_graph.tolist(),
         "bias_h": bias_h.tolist(),
         "bias_o": bias_o.tolist()
     }
@@ -530,15 +532,14 @@ def backpropagation_training(train_data = None, errors_text = None, status_label
         "bias_o": bias_o.tolist(),
         "qty_neurons": neuronas_h_cnt,
         "function_h_name": funcion_h_nombre,
-        "function_o_name": funcion_o_nombre
+        "function_o_name": funcion_o_nombre,
+        "arquitecture": [entradas.shape[1], neuronas_h_cnt, salidas_d.shape[1]]
     }
 
     if not stop_training:
         changue_status_training(status_label, "Entrenamiento finalizado", "green", download_weights_btn, download_training_data_btn, results_btn)
 
-
-
-def test_neural_network(test_data, normalize=True):
+def test_neural_network_normal(test_data, normalize=True):
     
     entradas = test_data["inputs"]
     salidas = test_data["outputs"]
@@ -615,44 +616,105 @@ def test_neural_network(test_data, normalize=True):
     errores = []
 
     # Impresion del resultado de las pruebas
-    print("\n\n\n\n")
-    print("||----------------------------------------------------------------||")
-    print("||                        PRUEBA DEL CASO                         ||")
-    print("||----------------------------------------------------------------||")
-    print(f"|| Cantidad de neuronas en la capa oculta: {neuronas_h_cnt}")
-    print("||----------------------------------------------------------------||")
-    print("||                        PESOS DE LA RED                         ||")
-    print("||----------------------------------------------------------------||")
-    print("|| Pesos de la capa oculta:                                       ||")
-    print("||----------------------------------------------------------------||")
-    for i in range(len(pesos_h)):
-        print("|| ", pesos_h[i])
-    print("||----------------------------------------------------------------||")
-    print("|| Bias de la capa oculta:                                        ||")
-    print("||----------------------------------------------------------------||")
-    print("|| ", bias_h)
-    print("||----------------------------------------------------------------||")
-    print("|| Pesos de la capa de salida:                                    ||")
-    print("||----------------------------------------------------------------||")
-    for i in range(len(pesos_o)):
-        print("|| ", pesos_o[i])
-    print("||----------------------------------------------------------------||")
-    print("|| Bias de la capa de salida:                                     ||")
-    print("||----------------------------------------------------------------||")
-    print("|| ", bias_o)
-    print("||----------------------------------------------------------------||")
-    print("||                        RESULTADOS OBTENIDOS                    ||")
-    print("||----------------------------------------------------------------||")
-    print("|| Patrón # | Entradas | Salidas deseadas | Salidas obtenidas | MSE     ||")
-    print("||----------------------------------------------------------------||")
+    #print("\n\n\n\n")
+    #print("||----------------------------------------------------------------||")
+    #print("||                        PRUEBA DEL CASO                         ||")
+    #print("||----------------------------------------------------------------||")
+    #print(f"|| Cantidad de neuronas en la capa oculta: {neuronas_h_cnt}")
+    #print("||----------------------------------------------------------------||")
+    #print("||                        PESOS DE LA RED                         ||")
+    #print("||----------------------------------------------------------------||")
+    #print("|| Pesos de la capa oculta:                                       ||")
+    #print("||----------------------------------------------------------------||")
+    #for i in range(len(pesos_h)):
+    #    print("|| ", pesos_h[i])
+    #print("||----------------------------------------------------------------||")
+    #print("|| Bias de la capa oculta:                                        ||")
+    #print("||----------------------------------------------------------------||")
+    #print("|| ", bias_h)
+    #print("||----------------------------------------------------------------||")
+    #print("|| Pesos de la capa de salida:                                    ||")
+    #print("||----------------------------------------------------------------||")
+    #for i in range(len(pesos_o)):
+    #    print("|| ", pesos_o[i])
+    #print("||----------------------------------------------------------------||")
+    #print("|| Bias de la capa de salida:                                     ||")
+    #print("||----------------------------------------------------------------||")
+    #print("|| ", bias_o)
+    #print("||----------------------------------------------------------------||")
+    #print("||                        RESULTADOS OBTENIDOS                    ||")
+    #print("||----------------------------------------------------------------||")
+    #print("|| Patrón # | Entradas | Salidas deseadas | Salidas obtenidas | MSE     ||")
+    #print("||----------------------------------------------------------------||")
     for i in range(len(entradas)):
         for j in range(len(salidas[i])):
             error = 0.5 * math.pow(salidas[i][j] - Y_resultados[i][j],2)
             errores.append(f"{error:.10f}")
-        print("|| ", i, "      | ", entradas[i], " | ", "\033[34m" ,salidas[i], "\033[0m", " | ", "\033[33m" , Y_resultados[i],"\033[0m", " | ", "\033[32m", errores, "\033[0m")
-    print("||----------------------------------------------------------------||")
-    print("||                        FIN DE LA PRUEBA                        ||")
-    print("||----------------------------------------------------------------||")
+    #    print("|| ", i, "      | ", entradas[i], " | ", "\033[34m" ,salidas[i], "\033[0m", " | ", "\033[33m" , Y_resultados[i],"\033[0m", " | ", "\033[32m", errores, "\033[0m")
+    #print("||----------------------------------------------------------------||")
+    #print("||                        FIN DE LA PRUEBA                        ||")
+    #print("||----------------------------------------------------------------||")
 
     return Y_resultados, errores
 
+def test_neural_network(test_data, normalize=True, output = True):
+    entradas = np.array(test_data["inputs"])
+    
+    salidas = None
+    if output: 
+        salidas = np.array(test_data["outputs"])
+    pesos_h = np.array(test_data["weights_h"])
+    pesos_o = np.array(test_data["weights_o"])
+    bias_h = np.array(test_data["bias_h"])
+    bias_o = np.array(test_data["bias_o"])
+    funcion_h_nombre = test_data["function_h_name"]
+    funcion_o_nombre = test_data["function_o_name"]
+    neuronas_h_cnt = test_data["qty_neurons"]
+
+    # Obtener la cantidad de neuronas de salida
+    neuronas_o_cnt = salidas.shape[1] if output else test_data["arquitecture"][2]
+        
+    # Obtener las funciones para la capa oculta (h) y la capa de salida
+    funcion_h = np.vectorize(switch_function_output(funcion_h_nombre))
+    funcion_o = np.vectorize(switch_function_output(funcion_o_nombre))
+
+    maximo_entrada = minimo_entrada = maximo_salida = minimo_salida = None
+    # Normalizar las entradas y las salidas
+    if normalize:
+        entradas, salidas, maximo_entrada, minimo_entrada, maximo_salida, minimo_salida = normalize_data(entradas, salidas)
+
+    # Verificar si alguna entrada tiene valor de 1 o 0, ajustarlo a 0.999 o 0.001
+    entradas = np.clip(entradas, 0.001, 0.999)
+
+    # Cálculos para la capa oculta
+    Nethj = np.dot(entradas, pesos_h.T) + bias_h
+    Yh = funcion_h(Nethj)
+
+    # Cálculos para la capa de salida
+    Netok = np.dot(Yh, pesos_o.T) + bias_o
+    Yk = funcion_o(Netok)
+
+    # Calcular errores
+    errores_patrones = np.full(entradas.shape[0], 0.0)
+    
+    if output:
+        for i in range(len(salidas)):
+            errores_patrones[i] = 0.5 * np.sum((salidas[i] - Yk[i]) ** 2)
+
+    # Desnormalizar si es necesario
+    if normalize:
+        Yk = Yk * (maximo_salida - minimo_salida) + minimo_salida
+
+    
+    for i in range(Yk.shape[0]):
+        if output:
+            print("\nSalidas Esperadas:")
+            print(salidas[i])
+        print("Salidas Obtenidas:")
+        print(Yk[i])
+        if output:
+            print("Error:")
+            print(errores_patrones[i])
+
+    return Yk.tolist() , errores_patrones.tolist()
+   
