@@ -1,12 +1,18 @@
-# Archivo para crear el algoritmo de backpropagation de nuevo ya que el otro no funciona
+# Description: This file contains the functions to train and test a neural network using the backpropagation algorithm
+# Authors: John Sebastián Galindo Hernández, Miguel Ángel Moreno Beltrán
+
+# region Import libraries
 import math 
 import random
 import datetime
 import numpy as np
+# endregion
 
+# Global variables
 stop_training = False
 weights_json, graph_json = None, None
 
+# region Info communication functions with GUI
 def set_stop_training(value = True):
     global stop_training
     stop_training = value
@@ -18,8 +24,9 @@ def get_weights_json():
 def get_graph_json():
     global graph_json
     return graph_json
+# endregion
 
-# region Funciones de activación y sus derivadas
+# region Activation functions and derivatives
 def sigmoid(x):
     # Clip para evitar problemas numéricos
     x = np.clip(x, -100, 100)
@@ -133,24 +140,14 @@ def switch_function_output(fuction_name, derivada=False):
 
 # endregion
 
-def normalize_data(entradas, salidas):
-    # Convertir entradas y salidas a numpy arrays para facilitar las operaciones
-    entradas = np.array(entradas)
-    salidas = np.array(salidas)
-
-    # Obtener el máximo y mínimo de todas las entradas y salidas
-    maximo_entrada = np.max(entradas)
-    minimo_entrada = np.min(entradas)
-    entradas_n = (entradas - minimo_entrada) / (maximo_entrada - minimo_entrada)
-
-    maximo_salida = np.max(salidas)
-    minimo_salida = np.min(salidas)
-    salidas_n = (salidas - minimo_salida) / (maximo_salida - minimo_salida)
-
-    # Retornar las entradas y salidas normalizadas junto con los máximos y mínimos
-    return entradas_n, salidas_n, maximo_entrada, minimo_entrada, maximo_salida, minimo_salida
-
+# region Backpropagation Old training functions
 def normalize_data_normal(entradas, salidas):
+    """
+        Function to normalize the inputs and outputs of the neural network
+        :param entradas: List of inputs
+        :param salidas: List of outputs
+        :return: Normalized inputs and outputs, max and min values of inputs and outputs
+    """
     # Entrada es una matriz [[]] y salida es una matriz [[]]
     # Normalizar las entradas y las salidas
     # hallar el valor máximo y el valor mínimo de las entradas
@@ -179,6 +176,21 @@ def normalize_data_normal(entradas, salidas):
 def backpropagation_training_normal(train_data = None, errors_text = None , status_label=None, download_weights_btn = None, download_training_data_btn = None, results_btn = None, main_window=None, normalize=True):
     from app import update_errors_ui, changue_status_training
     global weights_json, graph_json, stop_training
+    
+    """
+        Function to train a neural network using the backpropagation algorithm (Without numpy)
+        this function save the weights and training data in a json file
+        
+        :param train_data: Dictionary with the training data
+        :param errors_text: Text widget to show the errors
+        :param status_label: Label to show the status of the training
+        :param download_weights_btn: Button to download the weights
+        :param download_training_data_btn: Button to download the training data
+        :param results_btn: Button to see the results
+        :param main_window: Main window of the application (GUI)
+        
+        :return: None
+    """
     
     # Booleano para saber si se debe aumentar la cantidad de neuronas en la capa oculta
     aumentar_neuronas = False
@@ -396,9 +408,173 @@ def backpropagation_training_normal(train_data = None, errors_text = None , stat
     if not stop_training:
         changue_status_training(status_label, "Entrenamiento finalizado", "green", download_weights_btn, download_training_data_btn, results_btn)
 
+def test_neural_network_normal(test_data, normalize=True):
+    """
+        Function to test the neural network with a set of test data
+        
+        :param test_data: Dictionary with the test data
+        :param normalize: Boolean to normalize the data
+        :return: List of outputs and list of errors
+    """
+    
+    entradas = test_data["inputs"]
+    salidas = test_data["outputs"]
+    pesos_h = test_data["weights_h"]
+    pesos_o = test_data["weights_o"]
+    bias_h = test_data["bias_h"]
+    bias_o = test_data["bias_o"]
+    funcion_h_nombre = test_data["function_h_name"]
+    funcion_o_nombre = test_data["function_o_name"]
+    neuronas_h_cnt = test_data["qty_neurons"]
+
+
+    # Obtener la cantidad de neuronas de salida
+    neuronas_o_cnt = len(salidas[0])
+
+    # Obtener la funcion para la capa oculta (h) y la capa de salida
+    # También obtener las funciones para la derivada
+
+    funcion_h = switch_function_output(funcion_h_nombre)
+    funcion_o = switch_function_output(funcion_o_nombre)
+
+    entradas_n = salidas_n = maximo_entrada = minimo_entrada = maximo_salida = minimo_salida = None
+    # Normalizar las entradas y las salidas
+    if normalize:
+        entradas_n, salidas_n, maximo_entrada, minimo_entrada, maximo_salida, minimo_salida = normalize_data(entradas, salidas)
+
+    # Verificar si alguna entrada tiene valor de 1 y volver su valor a 0.999
+    # Verificar si alguna entrada tiene valor de 0 y volver su valor a 0.001
+    for i in range(len(entradas_n)):
+        for j in range(len(entradas_n[i])):
+            if entradas_n[i][j] == 1:
+                entradas_n[i][j] = 0.999
+            elif entradas_n[i][j] == 0:
+                entradas_n[i][j] = 0.001
+
+    # Realizar la suma de las entradas y los pesos de la capa oculta
+    # Despues se le suma el bias de la capa oculta
+    # Realizar la salida de la capa oculta
+    # Realizar la suma de las salidas de la capa oculta y los pesos de la capa de salida
+    # Despues se le suma el bias de la capa de salida
+    # Realizar la salida de la capa de salida
+    # Guardar el resultado en una lista 
+    # Imprimir el resultado de forma -> Patron #, Entradas, Salidas deseadas, Salidas obtenidas
+    Y_resultados = []
+    for p in range(len(entradas_n)):
+        x = entradas_n[p]
+        Nethj = [0 for i in range(neuronas_h_cnt)]
+        Yh = [0 for i in range(neuronas_h_cnt)]
+
+        for j in range(neuronas_h_cnt):
+            for i in range(len(x)):
+                Nethj[j] += x[i] * pesos_h[j][i]
+
+            Nethj[j] += bias_h[j]
+            Yh[j] = funcion_h(Nethj[j])
+
+        Netok = [0 for i in range(neuronas_o_cnt)]
+        Yk = [0 for i in range(neuronas_o_cnt)]
+
+        for k in range(neuronas_o_cnt):
+            for j in range(neuronas_h_cnt):
+                Netok[k] += Yh[j] * pesos_o[k][j]
+
+            Netok[k] += bias_o[k]
+            Yk[k] = funcion_o(Netok[k])
+            
+        Y_resultados.append(Yk)
+
+    if normalize:
+        Y_resultados = [[(Y_resultados[i][j] * (maximo_salida - minimo_salida)) + minimo_salida for j in range(neuronas_o_cnt)] for i in range(len(Y_resultados))]
+    else:
+        Y_resultados = [[Y_resultados[i][j] for j in range(neuronas_o_cnt)] for i in range(len(Y_resultados))]
+    
+    errores = []
+
+    # Impresion del resultado de las pruebas
+    #print("\n\n\n\n")
+    #print("||----------------------------------------------------------------||")
+    #print("||                        PRUEBA DEL CASO                         ||")
+    #print("||----------------------------------------------------------------||")
+    #print(f"|| Cantidad de neuronas en la capa oculta: {neuronas_h_cnt}")
+    #print("||----------------------------------------------------------------||")
+    #print("||                        PESOS DE LA RED                         ||")
+    #print("||----------------------------------------------------------------||")
+    #print("|| Pesos de la capa oculta:                                       ||")
+    #print("||----------------------------------------------------------------||")
+    #for i in range(len(pesos_h)):
+    #    print("|| ", pesos_h[i])
+    #print("||----------------------------------------------------------------||")
+    #print("|| Bias de la capa oculta:                                        ||")
+    #print("||----------------------------------------------------------------||")
+    #print("|| ", bias_h)
+    #print("||----------------------------------------------------------------||")
+    #print("|| Pesos de la capa de salida:                                    ||")
+    #print("||----------------------------------------------------------------||")
+    #for i in range(len(pesos_o)):
+    #    print("|| ", pesos_o[i])
+    #print("||----------------------------------------------------------------||")
+    #print("|| Bias de la capa de salida:                                     ||")
+    #print("||----------------------------------------------------------------||")
+    #print("|| ", bias_o)
+    #print("||----------------------------------------------------------------||")
+    #print("||                        RESULTADOS OBTENIDOS                    ||")
+    #print("||----------------------------------------------------------------||")
+    #print("|| Patrón # | Entradas | Salidas deseadas | Salidas obtenidas | MSE     ||")
+    #print("||----------------------------------------------------------------||")
+    for i in range(len(entradas)):
+        for j in range(len(salidas[i])):
+            error = 0.5 * math.pow(salidas[i][j] - Y_resultados[i][j],2)
+            errores.append(f"{error:.10f}")
+    #    print("|| ", i, "      | ", entradas[i], " | ", "\033[34m" ,salidas[i], "\033[0m", " | ", "\033[33m" , Y_resultados[i],"\033[0m", " | ", "\033[32m", errores, "\033[0m")
+    #print("||----------------------------------------------------------------||")
+    #print("||                        FIN DE LA PRUEBA                        ||")
+    #print("||----------------------------------------------------------------||")
+
+    return Y_resultados, errores
+# endregion
+
+# region Backpropagation ACTUAL training functions
+def normalize_data(entradas, salidas):
+    """
+        Function to normalize the inputs and outputs of the neural network
+        :param entradas: List of inputs
+        :param salidas: List of outputs
+        :return: Normalized inputs and outputs, max and min values of inputs and outputs
+    """
+    # Convertir entradas y salidas a numpy arrays para facilitar las operaciones
+    entradas = np.array(entradas)
+    salidas = np.array(salidas)
+
+    # Obtener el máximo y mínimo de todas las entradas y salidas
+    maximo_entrada = np.max(entradas)
+    minimo_entrada = np.min(entradas)
+    entradas_n = (entradas - minimo_entrada) / (maximo_entrada - minimo_entrada)
+
+    maximo_salida = np.max(salidas)
+    minimo_salida = np.min(salidas)
+    salidas_n = (salidas - minimo_salida) / (maximo_salida - minimo_salida)
+
+    # Retornar las entradas y salidas normalizadas junto con los máximos y mínimos
+    return entradas_n, salidas_n, maximo_entrada, minimo_entrada, maximo_salida, minimo_salida
+
 def backpropagation_training(train_data=None, errors_text=None, status_label=None, download_weights_btn=None, download_training_data_btn=None, results_btn=None, main_window=None, normalize=True):
     from app import update_errors_ui, changue_status_training
     global weights_json, graph_json, stop_training
+    """
+        Function to train a neural network using the backpropagation algorithm
+        this function save the weights and training data in a json file
+        
+        :param train_data: Dictionary with the training data
+        :param errors_text: Text widget to show the errors
+        :param status_label: Label to show the status of the training
+        :param download_weights_btn: Button to download the weights
+        :param download_training_data_btn: Button to download the training data
+        :param results_btn: Button to see the results
+        :param main_window: Main window of the application (GUI)
+        
+        :return: None
+    """
 
     # Inicializar listas para almacenar pesos, bias y errores
     errores_totales = []
@@ -539,125 +715,15 @@ def backpropagation_training(train_data=None, errors_text=None, status_label=Non
     if not stop_training:
         changue_status_training(status_label, "Entrenamiento finalizado", "green", download_weights_btn, download_training_data_btn, results_btn)
 
-def test_neural_network_normal(test_data, normalize=True):
-    
-    entradas = test_data["inputs"]
-    salidas = test_data["outputs"]
-    pesos_h = test_data["weights_h"]
-    pesos_o = test_data["weights_o"]
-    bias_h = test_data["bias_h"]
-    bias_o = test_data["bias_o"]
-    funcion_h_nombre = test_data["function_h_name"]
-    funcion_o_nombre = test_data["function_o_name"]
-    neuronas_h_cnt = test_data["qty_neurons"]
-
-
-    # Obtener la cantidad de neuronas de salida
-    neuronas_o_cnt = len(salidas[0])
-
-    # Obtener la funcion para la capa oculta (h) y la capa de salida
-    # También obtener las funciones para la derivada
-
-    funcion_h = switch_function_output(funcion_h_nombre)
-    funcion_o = switch_function_output(funcion_o_nombre)
-
-    entradas_n = salidas_n = maximo_entrada = minimo_entrada = maximo_salida = minimo_salida = None
-    # Normalizar las entradas y las salidas
-    if normalize:
-        entradas_n, salidas_n, maximo_entrada, minimo_entrada, maximo_salida, minimo_salida = normalize_data(entradas, salidas)
-
-    # Verificar si alguna entrada tiene valor de 1 y volver su valor a 0.999
-    # Verificar si alguna entrada tiene valor de 0 y volver su valor a 0.001
-    for i in range(len(entradas_n)):
-        for j in range(len(entradas_n[i])):
-            if entradas_n[i][j] == 1:
-                entradas_n[i][j] = 0.999
-            elif entradas_n[i][j] == 0:
-                entradas_n[i][j] = 0.001
-
-    # Realizar la suma de las entradas y los pesos de la capa oculta
-    # Despues se le suma el bias de la capa oculta
-    # Realizar la salida de la capa oculta
-    # Realizar la suma de las salidas de la capa oculta y los pesos de la capa de salida
-    # Despues se le suma el bias de la capa de salida
-    # Realizar la salida de la capa de salida
-    # Guardar el resultado en una lista 
-    # Imprimir el resultado de forma -> Patron #, Entradas, Salidas deseadas, Salidas obtenidas
-    Y_resultados = []
-    for p in range(len(entradas_n)):
-        x = entradas_n[p]
-        Nethj = [0 for i in range(neuronas_h_cnt)]
-        Yh = [0 for i in range(neuronas_h_cnt)]
-
-        for j in range(neuronas_h_cnt):
-            for i in range(len(x)):
-                Nethj[j] += x[i] * pesos_h[j][i]
-
-            Nethj[j] += bias_h[j]
-            Yh[j] = funcion_h(Nethj[j])
-
-        Netok = [0 for i in range(neuronas_o_cnt)]
-        Yk = [0 for i in range(neuronas_o_cnt)]
-
-        for k in range(neuronas_o_cnt):
-            for j in range(neuronas_h_cnt):
-                Netok[k] += Yh[j] * pesos_o[k][j]
-
-            Netok[k] += bias_o[k]
-            Yk[k] = funcion_o(Netok[k])
-            
-        Y_resultados.append(Yk)
-
-    if normalize:
-        Y_resultados = [[(Y_resultados[i][j] * (maximo_salida - minimo_salida)) + minimo_salida for j in range(neuronas_o_cnt)] for i in range(len(Y_resultados))]
-    else:
-        Y_resultados = [[Y_resultados[i][j] for j in range(neuronas_o_cnt)] for i in range(len(Y_resultados))]
-    
-    errores = []
-
-    # Impresion del resultado de las pruebas
-    #print("\n\n\n\n")
-    #print("||----------------------------------------------------------------||")
-    #print("||                        PRUEBA DEL CASO                         ||")
-    #print("||----------------------------------------------------------------||")
-    #print(f"|| Cantidad de neuronas en la capa oculta: {neuronas_h_cnt}")
-    #print("||----------------------------------------------------------------||")
-    #print("||                        PESOS DE LA RED                         ||")
-    #print("||----------------------------------------------------------------||")
-    #print("|| Pesos de la capa oculta:                                       ||")
-    #print("||----------------------------------------------------------------||")
-    #for i in range(len(pesos_h)):
-    #    print("|| ", pesos_h[i])
-    #print("||----------------------------------------------------------------||")
-    #print("|| Bias de la capa oculta:                                        ||")
-    #print("||----------------------------------------------------------------||")
-    #print("|| ", bias_h)
-    #print("||----------------------------------------------------------------||")
-    #print("|| Pesos de la capa de salida:                                    ||")
-    #print("||----------------------------------------------------------------||")
-    #for i in range(len(pesos_o)):
-    #    print("|| ", pesos_o[i])
-    #print("||----------------------------------------------------------------||")
-    #print("|| Bias de la capa de salida:                                     ||")
-    #print("||----------------------------------------------------------------||")
-    #print("|| ", bias_o)
-    #print("||----------------------------------------------------------------||")
-    #print("||                        RESULTADOS OBTENIDOS                    ||")
-    #print("||----------------------------------------------------------------||")
-    #print("|| Patrón # | Entradas | Salidas deseadas | Salidas obtenidas | MSE     ||")
-    #print("||----------------------------------------------------------------||")
-    for i in range(len(entradas)):
-        for j in range(len(salidas[i])):
-            error = 0.5 * math.pow(salidas[i][j] - Y_resultados[i][j],2)
-            errores.append(f"{error:.10f}")
-    #    print("|| ", i, "      | ", entradas[i], " | ", "\033[34m" ,salidas[i], "\033[0m", " | ", "\033[33m" , Y_resultados[i],"\033[0m", " | ", "\033[32m", errores, "\033[0m")
-    #print("||----------------------------------------------------------------||")
-    #print("||                        FIN DE LA PRUEBA                        ||")
-    #print("||----------------------------------------------------------------||")
-
-    return Y_resultados, errores
-
 def test_neural_network(test_data, normalize=True, output = True):
+    """
+        Function to test the neural network with a set of test data
+        
+        :param test_data: Dictionary with the test data
+        :param normalize: Boolean to normalize the data
+        
+        :return: List of outputs and list of errors
+    """
     entradas = np.array(test_data["inputs"])
     
     salidas = None
@@ -717,4 +783,4 @@ def test_neural_network(test_data, normalize=True, output = True):
             print(errores_patrones[i])
 
     return Yk.tolist() , errores_patrones.tolist()
-   
+# endregion

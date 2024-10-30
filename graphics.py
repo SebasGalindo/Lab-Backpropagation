@@ -1,6 +1,11 @@
+# Description: This file contains the functions to plot the neural network, the error total by epoch and the histograms.
+# Authors: John Sebastián Galindo Hernández, Miguel Ángel Moreno Beltrán
+
+# region Import libraries
 import matplotlib.pyplot as plt # Import matplotlib for make plots
 import numpy as np # Import numpy for calculate degrees
 import math # Import math for make mathematical operations
+# endregion
 
 def plot_neural_network_with_labels(layer_sizes, label=True):
     """
@@ -107,7 +112,7 @@ def plot_error_total_by_epoch(errors_total, last_epoch):
     epochs.insert(0, 0)
     epochs.append(last_epoch)
 
-    ax.plot(epochs, errors_total, color='darkorange', lw=2, marker='o', markersize=3)
+    ax.plot(epochs, errors_total, color='darkorange', lw=2, marker='o', markersize=1)
     
     # Set the labels
     ax.set_title('Error total por época')
@@ -117,8 +122,6 @@ def plot_error_total_by_epoch(errors_total, last_epoch):
     # Return the figure
     return fig
     
-import matplotlib.pyplot as plt
-
 def plot_histograms(histogram_data_list):
     """
     Plots histograms for multiple images using a logarithmic Y-axis scale and returns the figure(s).

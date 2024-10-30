@@ -1,11 +1,3 @@
-{
-    "kernels": [
-        {
-            "name": "3x3_Edge Detection (Laplacian of Gaussian) plus",
-            "type": "kernel",
-            "stride": 1,
-            "padding": 0,
-            "percentaje": 0.0
-        }
-    ]
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:63d5784a62a3f4e2ab0eb4f8f3a640134631bb3be307146d32677ebaf686160a
+size 238

@@ -1,18 +1,3 @@
-{
-    "kernels": [
-        {
-            "name": "rotate_image",
-            "sub_info": {
-                "angle": 20
-            },
-            "type": "special function"
-        },
-        {
-            "name": "rotate_image",
-            "sub_info": {
-                "angle": 20
-            },
-            "type": "special function"
-        }
-    ]
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:0e8096e6a20a2028988a5bb75fd49874597bf7c8c16c00c55050d0155f5018c4
+size 372

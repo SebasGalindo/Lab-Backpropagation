@@ -1,5 +1,7 @@
 # file for store functions that are used in differents files of the proyect
+# Authors: John Sebastián Galindo Hernández, Miguel Ángel Moreno Beltrán
 
+# region Import libraries
 import os # Import the os module to interact with the operating system
 import sys # Import the sys module to interact with the Python interpreter
 import random # Import the random module to generate random numbers
@@ -8,6 +10,7 @@ import json # Import the json module to work with JSON files
 import shutil # Import the shutil module to perform file operations
 import webbrowser # Import the webbrowser module to open web pages
 from tkinter import filedialog # Import the filedialog module to open file dialogs
+# endregion
 
 def get_resource_path(relative_path):
     """
@@ -93,7 +96,11 @@ def save_json(data, filename = "resultado", extension = ".json"):
         json.dump(data, file, indent=4)
         print(f"JSON guardado en: {json_path}")
 
+# region Second Case Functions
 def secondCase_Data():
+    """
+        Generate the data for the second case.
+    """
     # List initialization
     entradas = []
     salidas = []
@@ -122,7 +129,9 @@ def secondCase_Data():
     return data
 
 def add_or_replace_secon_case(second_case_json):
-
+    """
+    Add or replace the second case in the cases.json file.
+    """
     file_path = get_resource_path("Data/cases.json")
     # Open the file in write mode
     cases_json = {}
@@ -141,10 +150,10 @@ def add_or_replace_secon_case(second_case_json):
     with open(file_path, "w") as file:
         # Write the new data
         json.dump(cases_json, file, indent=4)
-    
+# endregion
 
-if __name__ == "__main__":
-    # Generate the data for the second case
-    data = secondCase_Data()
-    # Save the data in a JSON file
-    save_json(data, "testeo_datos_caso_2") 
+# if __name__ == "__main__":
+#     # Generate the data for the second case
+#     data = secondCase_Data()
+#     # Save the data in a JSON file
+#     save_json(data, "testeo_datos_caso_2") 

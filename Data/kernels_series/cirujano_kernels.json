@@ -1,16 +1,3 @@
-{
-    "kernels": [
-        {
-            "name": "5x5_Sharpen",
-            "stride": 1,
-            "padding": 0,
-            "type": "kernel"
-        },
-        {
-            "name": "3x3_Gaussian Blur",
-            "stride": 1,
-            "padding": 0,
-            "type": "kernel"
-        }
-    ]
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:bff17ec4c6e40141847cae0a58ab005f194df4340401f677d63c9b1b5788b491
+size 318

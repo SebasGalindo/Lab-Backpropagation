@@ -1,11 +1,16 @@
+# Description: Image processing functions for the Image Processing GUI
+# Authors: John Sebastián Galindo Hernández, Miguel Ángel Moreno Beltrán
+
+# region Import libraries
 import cv2
 from utils import get_resource_path
 from tkinter import filedialog # Import the filedialog module to open file dialogs
 import os
 import numpy as np 
 import matplotlib.pyplot as plt
+# endregion
 
-
+# region Image lecture and download
 def load_images(is_folder):
     """
     Load images from a folder or a single image.
@@ -41,6 +46,42 @@ def load_images(is_folder):
         print("Error loading images: ", e)
         return images
 
+def download_images(tag_name, images):
+    """
+        Funtion to download images in a folder.
+        all images will be saved in the same pgn format.
+    """
+    
+    if not images or len(images) == 0:
+        print("No images to download")
+        return
+    
+    if not tag_name or tag_name == "":
+        print("Tag name is required")
+        return
+    
+    print("Downloading images...")
+    # Print the shape of the image
+    print("Resolución: ", images[0].shape)
+    
+    print("Matrix of one image: ", images[0])
+    
+    # Get the path to save the image
+    folder = filedialog.askdirectory()
+    folder = get_resource_path(folder)
+    if folder:
+        try:
+            for i, img in enumerate(images):
+                # Save the image
+                bgr_image = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(f"{folder}/{tag_name}_{i}.png", bgr_image)
+        except Exception as e:
+            print("Error saving the images", e) 
+            
+    print("Images downloaded successfully")
+# endregion
+
+# region Normal kernel selection and application
 def apply_kernel_normal(image, kernel, padding=0, stride=1):
     """
     Aplica un kernel 3x3 o 5x5 sobre una imagen con padding y stride definidos.
@@ -497,7 +538,9 @@ def get_kernel(name = 'rgb_to_bgr', p = 0):
     }
     
     return kernels[name]
+# endregion
 
+# region Color transformations
 def rgb_to_bgr(image):
     return image[:, :, ::-1]
 
@@ -574,41 +617,9 @@ def increase_blue(image, intensity):
             new_row.append([pixel[0], pixel[1], b])
         output_image.append(new_row)
     return np.array(output_image, dtype=np.uint8)
+# endregion
 
-def download_images(tag_name, images):
-    """
-        Funtion to download images in a folder.
-        all images will be saved in the same pgn format.
-    """
-    
-    if not images or len(images) == 0:
-        print("No images to download")
-        return
-    
-    if not tag_name or tag_name == "":
-        print("Tag name is required")
-        return
-    
-    print("Downloading images...")
-    # Print the shape of the image
-    print("Resolución: ", images[0].shape)
-    
-    print("Matrix of one image: ", images[0])
-    
-    # Get the path to save the image
-    folder = filedialog.askdirectory()
-    folder = get_resource_path(folder)
-    if folder:
-        try:
-            for i, img in enumerate(images):
-                # Save the image
-                bgr_image = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                cv2.imwrite(f"{folder}/{tag_name}_{i}.png", bgr_image)
-        except Exception as e:
-            print("Error saving the images", e) 
-            
-    print("Images downloaded successfully")
-    
+# region Image transformations
 def plain_image(image):
     """
     Function to convert an image to a vector without numpy.
@@ -690,8 +701,8 @@ def resize_image(image, width, height, interpolation = "Bicubic"):
         interpolation = cv2.INTER_LANCZOS4
     elif interpolation == "Spline":
         interpolation = cv2.INTER_CUBIC
-    
-    image_resized = cv2.resize(image, (width, height), interpolation = interpolation)
+    image_copy = image.copy()
+    image_resized = cv2.resize(image_copy, (width, height), interpolation = interpolation)
     
     print(f"Resized image shape: {image_resized.shape}")
     
@@ -857,3 +868,4 @@ def binarize_image(image, threshold=128):
     _, binary_image = cv2.threshold(image, threshold, 255, cv2.THRESH_BINARY)
     
     return binary_image
+# endregion
