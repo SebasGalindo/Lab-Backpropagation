@@ -84,15 +84,20 @@ def swish_derivative(x):
     sigmoid_x = sigmoid(x)
     return sigmoid_x + x * sigmoid_x * (1 - sigmoid_x)
 
-
 def softmax(x):
-    exp_values = np.exp(x - np.max(x))  # Evitar overflow numérico
-    return exp_values / np.sum(exp_values)
+    # Para estabilidad numérica, resta el máximo de x antes de la exponenciación
+    exps = np.exp(x - np.max(x))
+    return exps / np.sum(exps)
 
+def softmax_derivative(x):
+    # La derivada de softmax aplicada a x
+    s = softmax(x).reshape(-1, 1)
+    return np.diagflat(s) - np.dot(s, s.T)
 
-def softmax_derivative(softmax_output):
-    # softmax_output es la salida del softmax para el input correspondiente
-    return [s * (1 - s) for s in softmax_output]
+def cross_entropy_error(y_true, y_pred):
+    epsilon = 1e-10  # Para evitar log(0)
+    y_pred = np.clip(y_pred, epsilon, 1 - epsilon)  # Evita 0 o 1 exactos en la predicción
+    return -np.sum(y_true * np.log(y_pred))
 
 
 # Función switch 
@@ -130,6 +135,10 @@ def switch_function_output(fuction_name, derivada=False):
         "Swish": {
             "function": swish,
             "derivative": swish_derivative
+        },
+        "softmax": {
+            "function": softmax,
+            "derivative": softmax_derivative
         }
     }
 
@@ -644,7 +653,14 @@ def backpropagation_training(train_data=None, errors_text=None, status_label=Non
             Yk = funcion_o(Netok)
 
             # Backward propagation
-            delta_o = (yd - Yk) * funcion_o_derivada(Yk)
+            delta_o = None
+            if funcion_o_nombre == "softmax":
+                # Error simplificado con softmax + entropía cruzada
+                delta_o = Yk - yd
+            else:
+                # Error normal para otras funciones de activación
+                delta_o = (yd - Yk) * funcion_o_derivada(Yk)
+
             delta_h = funcion_h_derivada(Nethj) * np.dot(pesos_o.T, delta_o)
 
             # Actualización de pesos capa de salida
@@ -657,8 +673,10 @@ def backpropagation_training(train_data=None, errors_text=None, status_label=Non
             bias_h += alpha * delta_h
             momentum_h = pesos_h.copy()
 
-            # Error del patrón
-            errores_patrones[p] = 0.5 * np.sum((yd - Yk) ** 2)
+            if funcion_o_nombre == "softmax":
+                errores_patrones[p] = cross_entropy_error(yd, Yk)
+            else:
+                errores_patrones[p] = 0.5 * np.sum((yd - Yk) ** 2)  # Error cuadrático medio
 
         epoca += 1
 
