@@ -150,7 +150,7 @@ def apply_kernel_normal(image, kernel, padding=0, stride=1):
 
     return output_image_array  # Devolver la imagen convertida en formato array
 
-def apply_kernel(image, kernel, padding=0, stride=1):
+def apply_kernel(image, kernel, padding=0, stride=1, index=0):
     """
     Aplica un kernel sobre una imagen con padding y stride definidos utilizando numpy.
     
@@ -163,6 +163,9 @@ def apply_kernel(image, kernel, padding=0, stride=1):
     Returns:
         La imagen convolucionada en formato compatible con Image.fromarray().
     """
+    
+    print(f"Aplicando kernel a la imagen {index}...")
+    
     # Dimensiones de la imagen y del kernel
     image_height, image_width, _ = image.shape
     kernel_size = len(kernel)  # Asumimos kernel cuadrado (3x3, 5x5, etc.)
@@ -199,6 +202,7 @@ def apply_kernel(image, kernel, padding=0, stride=1):
     # Clipping de los valores para mantenerlos en el rango [0, 255]
     output_image = np.clip(output_image, 0, 255).astype(np.uint8)
 
+    print(f"Kernel aplicado a la imagen {index} correctamente")
     return output_image
 
 def get_kernel(name = 'rgb_to_bgr', p = 0):
@@ -541,19 +545,31 @@ def get_kernel(name = 'rgb_to_bgr', p = 0):
 # endregion
 
 # region Color transformations
-def rgb_to_bgr(image):
-    return image[:, :, ::-1]
+def rgb_to_bgr(image, index=0):
+    image_c = image.copy()
+    image_c[:, :, ::-1]
+    print(f"Imagen {index} convertida a BGR")
+    return image_c
 
-def bgr_to_rgb(image):
-    return image[:, :, ::-1]
+def bgr_to_rgb(image, index=0):
+    image_c = image.copy()
+    image_c[:, :, ::-1]
+    print(f"Imagen {index} convertida de BGR a RGB")
+    return image_c
 
-def gray_to_rgb(image):
-    return np.stack((image, image, image), axis=-1)
+def gray_to_rgb(image, index=0):
+    result = np.stack((image, image, image), axis=-1)
+    print(f"Imagen {index} convertida de Gris a RGB")
+    return result
 
-def gray_to_bgr(image):
-    return np.stack((image, image, image), axis=-1)
+def gray_to_bgr(image, index=0):
+    result = np.stack((image, image, image), axis=-1)
+    print(f"Imagen {index} convertida de Gris a BGR")
+    return result
 
-def rgb_to_gray(image):
+def rgb_to_gray(image, index=0):
+    
+    print(f"Convirtiendo imagen {index} a escala de grises...")
     # Dimensiones de la imagen
     height, width, _ = image.shape
     
@@ -570,25 +586,30 @@ def rgb_to_gray(image):
             # Asignar el mismo valor a los tres canales
             gray_image[y][x] = [gray_value, gray_value, gray_value]
     
+    print(f"Imagen {index} convertida a escala de grises")
     return np.array(gray_image, dtype=np.uint8)
 
-def bgr_to_gray(image):
+def bgr_to_gray(image, index=0):
     gray_image = (0.1140 * image[:, :, 0]) + (0.5870 * image[:, :, 1]) + (0.2989 * image[:, :, 2])
+    print(f"Imagen {index} convertida de BGR a escala de grises")
     return gray_image.astype(np.uint8)
 
-def reduce_red(image, p=0.5):
+def reduce_red(image, p=0.5, index=0):
     image[:, :, 0] = (image[:, :, 0] * p).astype('uint8')
+    print(f"Imagen {index} con el canal rojo reducido")
     return image
 
-def reduce_green(image, p=0.5):
+def reduce_green(image, p=0.5, index=0):
     image[:, :, 1] = (image[:, :, 1] * p).astype('uint8')
+    print(f"Imagen {index} con el canal verde reducido")
     return image
 
-def reduce_blue(image, p=0.5):
+def reduce_blue(image, p=0.5, index=0):
     image[:, :, 2] = (image[:, :, 2] * p).astype('uint8')
+    print(f"Imagen {index} con el canal azul reducido")
     return image
 
-def increase_red(image, intensity):
+def increase_red(image, intensity, index=0):
     output_image = []
     for row in image:
         new_row = []
@@ -596,9 +617,11 @@ def increase_red(image, intensity):
             r = min(255, int(pixel[0] * (1 + intensity)))
             new_row.append([r, pixel[1], pixel[2]])
         output_image.append(new_row)
+    
+    print(f"Imagen {index} con el canal rojo aumentado")
     return np.array(output_image, dtype=np.uint8)
 
-def increase_green(image, intensity):
+def increase_green(image, intensity, index=0):
     output_image = []
     for row in image:
         new_row = []
@@ -606,9 +629,11 @@ def increase_green(image, intensity):
             g = min(255, int(pixel[1] * (1 + intensity)))
             new_row.append([pixel[0], g, pixel[2]])
         output_image.append(new_row)
+        
+    print(f"Imagen {index} con el canal verde aumentado")
     return np.array(output_image, dtype=np.uint8)
 
-def increase_blue(image, intensity):
+def increase_blue(image, intensity, index=0):
     output_image = []
     for row in image:
         new_row = []
@@ -616,11 +641,13 @@ def increase_blue(image, intensity):
             b = min(255, int(pixel[2] * (1 + intensity)))
             new_row.append([pixel[0], pixel[1], b])
         output_image.append(new_row)
+        
+    print(f"Imagen {index} con el canal azul aumentado")
     return np.array(output_image, dtype=np.uint8)
 # endregion
 
 # region Image transformations
-def plain_image(image):
+def plain_image(image, index=0):
     """
     Function to convert an image to a vector without numpy.
     
@@ -638,10 +665,10 @@ def plain_image(image):
         for pixel in row:
             vector.extend(pixel)
     
-    print("Image converted to vector")
+    print(f"Image {index} converted to vector")
     return vector
 
-def normalize_image_vector(image_vector):
+def normalize_image_vector(image_vector, index=0):
     """
     Normalize the image vector.
     Where the max value is 255.
@@ -655,10 +682,11 @@ def normalize_image_vector(image_vector):
     
     for i in range(len(image_vector)):
         image_vector[i] = image_vector[i] / 255
-        
+    
+    print(f"Image {index} vector normalizado")
     return image_vector
 
-def resize_image(image, width, height, interpolation = "Bicubic"):
+def resize_image(image, width, height, interpolation = "Bicubic", index=0):
     """
     Resize an image.
     
@@ -704,11 +732,11 @@ def resize_image(image, width, height, interpolation = "Bicubic"):
     image_copy = image.copy()
     image_resized = cv2.resize(image_copy, (width, height), interpolation = interpolation)
     
-    print(f"Resized image shape: {image_resized.shape}")
+    print(f"Imagen {index} redimencionada a la forma: {image_resized.shape}")
     
     return image_resized
 
-def rotate_image(image, angle):
+def rotate_image(image, angle, index=0):
     """
     Rotates the input image by the specified angle.
     
@@ -734,9 +762,10 @@ def rotate_image(image, angle):
     # Perform the rotation
     rotated_image = cv2.warpAffine(temp_image, M, (w, h))
     
+    print(f"Imagen {index} rotada {angle} grados")
     return rotated_image
 
-def apply_colormap(image, colormap="JET"):
+def apply_colormap(image, colormap="JET", index=0):
     """
     Applies a colormap to a grayscale image.
     
@@ -777,15 +806,16 @@ def apply_colormap(image, colormap="JET"):
         print("Invalid colormap")
         return
     
-    colormap = colormaps[colormap]
+    colormap_f = colormaps[colormap]
     
     # Check if the image is grayscale; if not, convert it
     if len(image.shape) == 3:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
     # Apply the specified colormap
-    colored_image = cv2.applyColorMap(image, colormap)
+    colored_image = cv2.applyColorMap(image, colormap_f)
     
+    print(f"Mapeo de colores {colormap}  a la imagen {index}")
     return colored_image
 
 def get_histogram_data(image):
@@ -813,7 +843,7 @@ def get_histogram_data(image):
     
     return histogram_data
 
-def compress_image_dct(image, compression_factor=0.5):
+def compress_image_dct(image, compression_factor=0.5, index=0):
     """
     Compresses the image using Discrete Cosine Transform (DCT).
     
@@ -847,9 +877,10 @@ def compress_image_dct(image, compression_factor=0.5):
     # Scale back to 8-bit format
     compressed_image = np.uint8(compressed_image * 255)
     
+    print(f"Imagen {index} comprimida con factor {compression_factor}")
     return compressed_image
 
-def binarize_image(image, threshold=128):
+def binarize_image(image, threshold=128, index=0):
     """
     Converts the input image into a binary image (black and white).
     
@@ -867,5 +898,6 @@ def binarize_image(image, threshold=128):
     # Apply binary thresholding
     _, binary_image = cv2.threshold(image, threshold, 255, cv2.THRESH_BINARY)
     
+    print(f"Imagen {index} binarizada con umbral {threshold}")
     return binary_image
 # endregion

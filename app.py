@@ -10,6 +10,7 @@ from PIL import Image
 import json
 import threading
 import concurrent.futures
+import os
 # endregion
 
 # region Import Internal libraries
@@ -115,6 +116,7 @@ train_images_data, label_categories = [], None
 chargued_tags_frame = None
 info_window = None
 image_training_frame = None
+image_frame = None
 
 # Test images variables
 image_status_lbl, txt_categories = None, None
@@ -616,7 +618,7 @@ def train_frame_creation(master = None, num_excercise = 0, row = 8, is_for_image
     function_lbl2 = ctk.CTkLabel(master=train_frame, text=function_txt2, font=("Arial", 16, "bold"), text_color=GUI_ELEMENTS["colors"]["foreground"])
     function_lbl2.grid(row=4, column=0, pady=10, sticky="w", columnspan=3)
 
-    layer_o_options = ["Tangente Hiperbólica", "Sigmoidal", "Softplus", "ReLU", "Leaky ReLU", "Lineal", "ELU", "Swish"]
+    layer_o_options = ["Tangente Hiperbólica", "Sigmoidal", "Softplus", "ReLU", "Leaky ReLU", "Lineal", "ELU", "Swish", "Softmax"]
     layer_o_combobox = ctk.CTkComboBox(master=train_frame, values=layer_o_options, font=("Arial", 16), width=200, border_width=0)
     layer_o_combobox.grid(row=4, column=3, pady=10, sticky="w", columnspan=3)
     # endregion
@@ -694,14 +696,20 @@ def train_frame_creation(master = None, num_excercise = 0, row = 8, is_for_image
                 
                 for i in range(len(n_images)):
                     inputs.append(n_images[i])
-                    # append the index of the set category labels to the outputs
-                    outputs.append([list(label_categories).index(label)])
+                    # append the output in a softmax way
+                    output = [0 for _ in range(len(label_categories))]
+                    output[list(label_categories).index(label)] = 1
+                    outputs.append(output)
 
         data_train_json = {
             "inputs": inputs,
             "outputs": outputs
         }
         
+        # print the labels categories + its softmax output
+        unique_outputs = set(tuple(i) for i in outputs)
+        for i in range(len(label_categories)):
+            print(f"Label: {list(label_categories)[i]} -> Output: {list(unique_outputs)[i]}")
         errors_text = create_training_process_frame(train_frame, len(inputs))
 
 def changue_status_training(status_label, text, color, download_weights_btn, download_training_data_btn, results_btn):
@@ -1093,7 +1101,7 @@ def update_errors_ui(epoch, errores_patrones, total_error, precision, errors_tex
         error_txt = f"{errores_patrones[i]:.10f}"
         if color_tag == "error_low" and len(errores_patrones) > 200 and not final:
             continue
-        if errores_patrones[i] <= (precision/2) and not final and len(errores_patrones) > 50:
+        if errores_patrones[i] <= (precision/2) and not final and len(errores_patrones) > 200:
             continue
         if j % 4 != 0:
             errors_text.insert("end", f"{pattern_txt} ", "subtitle")
@@ -1402,6 +1410,8 @@ def add_results_info(frame, test_data, row, num_excercise=0, is_for_image = Fals
             y_obtained += f"{results[i][j]:.10f}"
             if not is_for_image:
                 y_obtained += '\n'
+            else:
+                y_obtained += ' | '
 
         if num_excercise != 4 and not is_for_image:
             test_txt2 = f"Entradas:\n {input}\nSalidas Esperadas:\n {output}\nSalidas Obtenidas:\n {y_obtained}\nError:\n {error}"
@@ -1883,7 +1893,7 @@ def create_images_frame(frame, images, col=0, is_filtered=False):
     is_filtered: Boolean to know if the images are filtered or not
     """   
     # Load the images, each image need to be in a label
-    global images_labels, actual_first_image, filtered_images_labels, next_images_btn, before_images_btn, filtered_images
+    global images_labels, actual_first_image, filtered_images_labels, next_images_btn, before_images_btn, filtered_images, image_frame
 
     main_frame = ctk.CTkScrollableFrame(master=frame, corner_radius=8, fg_color="#ffffff", width=600 ,height=600, orientation="vertical")
     main_frame.grid(row=5, column=col, sticky="nsw", columnspan=6, pady=10, padx=10)
@@ -1945,26 +1955,35 @@ def update_show_images(next_images_btn, before_images_btn, actual_first_img):
     before_images_btn: Button to show the before images
     actual_first_img: Index of the first image to show
     """
-    global images_labels, images, actual_first_image, filtered_images_labels, filtered_images
+    global images_labels, images, actual_first_image, filtered_images_labels, filtered_images, image_frame
 
     actual_first_image = actual_first_img
     last_image = (actual_first_img+10) if len(images) > actual_first_img + 10 else len(images)
     j = 0
+    height_total_normal = 0
+    height_total_treated = 0 
     for i in range(actual_first_img,last_image):
         width = images[i].shape[1]
         height = images[i].shape[0]
+        height_total_normal += height
         image_temp = Image.fromarray(images[i])
         photo = ctk.CTkImage(dark_image=image_temp, light_image=image_temp, size=(width, height))
         images_labels[j].configure(image=photo)
         
         width = filtered_images[i].shape[1]
         height = filtered_images[i].shape[0]
+        height_total_treated += height
         image_f = Image.fromarray(filtered_images[i])
         photo_f = ctk.CTkImage(dark_image=image_f, light_image=image_f, size=(width, height))
         filtered_images_labels[j].configure(image=photo_f)      
         
         j += 1
 
+    height_total_normal += 100
+    height_total_treated += 100
+    image_frame.configure(height=max(height_total_normal,height_total_treated))
+    image_frame.update()
+    
     # complete the for when is less than 10 images to delete the rest of the images in the labels
     for i in range(j, len(images_labels)):
         images_labels[i].configure(image=None)
@@ -2072,24 +2091,25 @@ def apply_sel_kernel(kernel_name, stride=1, padding=0, percentaje = 0.5 , sub_in
     filtered_images = [[] for i in range(len(images))]
 
     # Crear un pool de procesos
-    with concurrent.futures.ProcessPoolExecutor() as executor:
+    num_processes = os.cpu_count() * 2
+    with concurrent.futures.ProcessPoolExecutor(max_workers= num_processes) as executor:
         # Enviar las tareas al pool de procesos, junto con el índice para asegurar el orden
         futures = None
         if type_data == "kernel":
-            futures = {executor.submit(apply_kernel, images[i], kernel, padding, stride): i for i in range(len(images))}
+            futures = {executor.submit(apply_kernel, images[i], kernel, padding, stride, i): i for i in range(len(images))}
         elif type_data == "color percentaje":
-            futures = {executor.submit(kernel, images[i], percentaje): i for i in range(len(images))}
+            futures = {executor.submit(kernel, images[i], percentaje, i): i for i in range(len(images))}
         elif type_data == "color modification":
-            futures = {executor.submit(kernel, images[i]): i for i in range(len(images))}
+            futures = {executor.submit(kernel, images[i], i): i for i in range(len(images))}
         elif type_data == "resize":
-            futures = {executor.submit(kernel, images[i], sub_info["width"], sub_info["height"], sub_info["interpolation"]): i for i in range(len(images))}
+            futures = {executor.submit(kernel, images[i], sub_info["width"], sub_info["height"], sub_info["interpolation"], i): i for i in range(len(images))}
         elif type_data == "special function":
             data = 0
             data = sub_info["colormap"] if kernel_name == "apply_colormap" else data
             data = sub_info["compression"] if kernel_name == "compress_image" else data
             data = sub_info["umbral"] if kernel_name == "binarize_image" else data
             data = sub_info["angle"] if kernel_name == "rotate_image" else data
-            futures = {executor.submit(kernel, images[i], data): i for i in range(len(images))}
+            futures = {executor.submit(kernel, images[i], data, i): i for i in range(len(images))}
         # Recuperar los resultados en el orden original
         for future in concurrent.futures.as_completed(futures):
             index = futures[future]  # Recuperamos el índice de la imagen
@@ -2213,7 +2233,7 @@ def resize_treatment_images(width, height, interpolation):
         return
     
     apply_sel_kernel(kernel_name="resize_image", sub_info={"width": int(width), "height": int(height), "interpolation": interpolation})
-     
+        
 def apply_colormap(colormap):
     """
     Apply the colormap to the images in the application to treat them
@@ -2264,7 +2284,7 @@ def binarize_images(umbral):
         show_default_error("El umbral debe ser un número entero")
         return
     
-    if not int(umbral) in range(0, 255):
+    if not int(umbral) in range(0, 256):
         show_default_error("El umbral debe estar en el rango de 0 a 255")
         return
     
@@ -2740,24 +2760,25 @@ def apply_kernel_series(images, selected_kernel_series):
         
         main_window.update()
         
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        num_process = os.cpu_count() * 2
+        with concurrent.futures.ProcessPoolExecutor(max_workers= num_process) as executor:
             # Enviar las tareas al pool de procesos, junto con el índice para asegurar el orden
             futures = None
             if type_data == "kernel":
-                futures = {executor.submit(apply_kernel, filtered_images[i], kernel, padding, stride): i for i in range(len(filtered_images))}
+                futures = {executor.submit(apply_kernel, filtered_images[i], kernel, padding, stride, i): i for i in range(len(filtered_images))}
             elif type_data == "color percentaje":
-                futures = {executor.submit(kernel, filtered_images[i], percentaje): i for i in range(len(filtered_images))}
+                futures = {executor.submit(kernel, filtered_images[i], percentaje, i): i for i in range(len(filtered_images))}
             elif type_data == "color modification":
-                futures = {executor.submit(kernel, filtered_images[i]): i for i in range(len(filtered_images))}
+                futures = {executor.submit(kernel, filtered_images[i], i): i for i in range(len(filtered_images))}
             elif type_data == "resize":
-                futures = {executor.submit(kernel, filtered_images[i], sub_info["width"], sub_info["height"], sub_info["interpolation"]): i for i in range(len(filtered_images))}
+                futures = {executor.submit(kernel, filtered_images[i], sub_info["width"], sub_info["height"], sub_info["interpolation"], i): i for i in range(len(filtered_images))}
             elif type_data == "special function":
                 data = 0
                 data = sub_info["colormap"] if kernel_name == "apply_colormap" else data
                 data = sub_info["compression"] if kernel_name == "compress_image" else data
                 data = sub_info["umbral"] if kernel_name == "binarize_image" else data
                 data = sub_info["angle"] if kernel_name == "rotate_image" else data
-                futures = {executor.submit(kernel, filtered_images[i], data): i for i in range(len(filtered_images))}
+                futures = {executor.submit(kernel, filtered_images[i], data, i): i for i in range(len(filtered_images))}
             # Recuperar los resultados en el orden original
             for future in concurrent.futures.as_completed(futures):
                 index = futures[future]  # Recuperamos el índice de la imagen
@@ -3028,7 +3049,7 @@ def test_image_frame_creation(master):
     
     # Label for the result
     result_lbl = ctk.CTkLabel(master=test_frame, text="Resultado:", font=("Arial", 16, "bold"), text_color=GUI_ELEMENTS["colors"]["foreground"], anchor="center", justify="center")
-    result_lbl.grid(row=7, column=2, pady=10, padx=15, sticky="sen", columnspan=4)
+    result_lbl.grid(row=7, column=2, pady=10, padx=15, sticky="swen", columnspan=10)
 
 def load_test_image():
     """
@@ -3111,7 +3132,9 @@ def add_test_category(category):
     
     for category in test_categories:
         index = test_categories.index(category)
-        txt_categories.insert("end", f"{index} - {category}\n", "title")  
+        list_category = [0 for i in range(len(test_categories))]
+        list_category[index] = 1
+        txt_categories.insert("end", f"{list_category} - {category}\n", "title")
 
 def delete_test_category(category):
     """
@@ -3144,7 +3167,9 @@ def delete_test_category(category):
     
     for category in test_categories:
         index = test_categories.index(category)
-        txt_categories.insert("end", f"{index} - {category}\n", "title")  
+        list_category = [0 for i in range(len(test_categories))]
+        list_category[index] = 1
+        txt_categories.insert("end", f"{list_category} - {category}\n", "title")
 
 def check_default_categories(check):
     """
@@ -3178,8 +3203,10 @@ def check_default_categories(check):
         
         for category in test_categories:
             index = test_categories.index(category)
-            txt_categories.insert("end", f"{index} - {category}\n", "title")  
-
+            list_category = [0 for i in range(len(test_categories))]
+            list_category[index] = 1
+            txt_categories.insert("end", f"{list_category} - {category}\n", "title")
+            
 def charge_default_weights(check):
     """
     Check the default weights for the test images in the application
@@ -3355,8 +3382,8 @@ def start_image_test():
         show_default_error("Error durante la prueba")
         return
     
-    
-    result_category = test_categories[int(results[0][0])]
+    result_index = results[0].index(max(results[0]))
+    result_category = test_categories[result_index]
     result_lbl.configure(text=f"Resultado: {results[0]} = {result_category}")
 # endregion
 

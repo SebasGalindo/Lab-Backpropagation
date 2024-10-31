@@ -86,13 +86,15 @@ def swish_derivative(x):
 
 def softmax(x):
     # Para estabilidad numérica, resta el máximo de x antes de la exponenciación
+    x = np.clip(x, -100, 100)
     exps = np.exp(x - np.max(x))
     return exps / np.sum(exps)
 
-def softmax_derivative(x):
-    # La derivada de softmax aplicada a x
-    s = softmax(x).reshape(-1, 1)
-    return np.diagflat(s) - np.dot(s, s.T)
+def softmax_test(x):
+    # Asegura estabilidad numérica
+    x = np.clip(x, -100, 100)
+    exps = np.exp(x - np.max(x, axis=1, keepdims=True))
+    return exps / np.sum(exps, axis=1, keepdims=True)
 
 def cross_entropy_error(y_true, y_pred):
     epsilon = 1e-10  # Para evitar log(0)
@@ -135,10 +137,6 @@ def switch_function_output(fuction_name, derivada=False):
         "Swish": {
             "function": swish,
             "derivative": swish_derivative
-        },
-        "softmax": {
-            "function": softmax,
-            "derivative": softmax_derivative
         }
     }
 
@@ -604,13 +602,15 @@ def backpropagation_training(train_data=None, errors_text=None, status_label=Non
 
     # Obtener las funciones de activación y sus derivadas
     funcion_h = np.vectorize(switch_function_output(funcion_h_nombre))
-    funcion_o = np.vectorize(switch_function_output(funcion_o_nombre))
+    funcion_o = np.vectorize(switch_function_output(funcion_o_nombre)) if funcion_o_nombre != "Softmax" else softmax
     funcion_h_derivada = np.vectorize(switch_function_output(funcion_h_nombre, True))
     funcion_o_derivada = np.vectorize(switch_function_output(funcion_o_nombre, True))
 
     # Normalizar entradas y salidas si es necesario
     if normalize:
         entradas, salidas_d, *_ = normalize_data(entradas, salidas_d) 
+
+    print("Salidas deseadas: ", salidas_d)
 
     # Inicializar pesos y bias con numpy
     pesos_h = np.random.uniform(0.1, 1, (neuronas_h_cnt, entradas.shape[1]))
@@ -634,60 +634,66 @@ def backpropagation_training(train_data=None, errors_text=None, status_label=Non
     momentum_h = np.zeros_like(pesos_h)
     momentum_o = np.zeros_like(pesos_o)
 
-    while np.any(errores_patrones > precision):
-        if epoca % 10 == 0:
-            error_total = np.mean(errores_patrones)
-            errores_totales.append(error_total)
-            errores_patrones_registro.append(errores_patrones.copy().tolist())
-            main_window.after(0, update_errors_ui, epoca, errores_patrones, error_total, precision, errors_text, main_window, False)
+    try:
+        while np.any(errores_patrones > precision):
+            if epoca % 10 == 0:
+                error_total = np.mean(errores_patrones)
+                errores_totales.append(error_total)
+                errores_patrones_registro.append(errores_patrones.copy().tolist())
+                main_window.after(0, update_errors_ui, epoca, errores_patrones, error_total, precision, errors_text, main_window, False)
 
-        for p in range(entradas.shape[0]):
-            x = entradas[p]
-            yd = salidas_d[p]
+            for p in range(entradas.shape[0]):
+                x = entradas[p]
+                yd = salidas_d[p]
 
-            # Forward propagation
-            Nethj = np.dot(pesos_h, x) + bias_h
-            Yh = funcion_h(Nethj)
+                # Forward propagation
+                Nethj = np.dot(pesos_h, x) + bias_h
+                Yh = funcion_h(Nethj)
 
-            Netok = np.dot(pesos_o, Yh) + bias_o
-            Yk = funcion_o(Netok)
+                Netok = np.dot(pesos_o, Yh) + bias_o
+                Yk = funcion_o(Netok)
 
-            # Backward propagation
-            delta_o = None
-            if funcion_o_nombre == "softmax":
-                # Error simplificado con softmax + entropía cruzada
-                delta_o = Yk - yd
-            else:
-                # Error normal para otras funciones de activación
-                delta_o = (yd - Yk) * funcion_o_derivada(Yk)
+                # Backward propagation
+                delta_o = None
+                if funcion_o_nombre == "Softmax":
+                    # Error simplificado con softmax + entropía cruzada
+                    delta_o = yd - Yk
+                else:
+                    # Error normal para otras funciones de activación
+                    delta_o = (yd - Yk) * funcion_o_derivada(Yk)
 
-            delta_h = funcion_h_derivada(Nethj) * np.dot(pesos_o.T, delta_o)
+                delta_h = funcion_h_derivada(Nethj) * np.dot(pesos_o.T, delta_o)
 
-            # Actualización de pesos capa de salida
-            pesos_o += alpha * np.outer(delta_o, Yh) + beta * (pesos_o - momentum_o)
-            bias_o += alpha * delta_o
-            momentum_o = pesos_o.copy()
+                # Actualización de pesos capa de salida
+                pesos_o += alpha * np.outer(delta_o, Yh) + beta * (pesos_o - momentum_o)
+                bias_o += alpha * delta_o
+                momentum_o = pesos_o.copy()
 
-            # Actualización de pesos capa oculta
-            pesos_h += alpha * np.outer(delta_h, x) + beta * (pesos_h - momentum_h)
-            bias_h += alpha * delta_h
-            momentum_h = pesos_h.copy()
+                # Actualización de pesos capa oculta
+                pesos_h += alpha * np.outer(delta_h, x) + beta * (pesos_h - momentum_h)
+                bias_h += alpha * delta_h
+                momentum_h = pesos_h.copy()
 
-            if funcion_o_nombre == "softmax":
-                errores_patrones[p] = cross_entropy_error(yd, Yk)
-            else:
-                errores_patrones[p] = 0.5 * np.sum((yd - Yk) ** 2)  # Error cuadrático medio
+                if funcion_o_nombre == "Softmax":
+                    errores_patrones[p] = cross_entropy_error(yd, Yk)
+                else:
+                    errores_patrones[p] = 0.5 * np.sum((yd - Yk) ** 2)  # Error cuadrático medio
 
-        epoca += 1
+            epoca += 1
 
-        if epoca >= iteraciones_max:
-            main_window.after(0, changue_status_training, status_label, "Límite de épocas alcanzado", "red", download_weights_btn, download_training_data_btn, results_btn)
-            return
+            if epoca >= iteraciones_max:
+                main_window.after(0, changue_status_training, status_label, "Límite de épocas alcanzado", "red", download_weights_btn, download_training_data_btn, results_btn)
+                return
 
-        if stop_training:
-            main_window.after(0, changue_status_training, status_label, "Entrenamiento detenido", "red", download_weights_btn, download_training_data_btn, results_btn)
-            return
+            if stop_training:
+                main_window.after(0, changue_status_training, status_label, "Entrenamiento detenido", "red", download_weights_btn, download_training_data_btn, results_btn)
+                return
 
+    except Exception as e:
+        print("Error en el entrenamiento: ", e)
+        main_window.after(0, changue_status_training, status_label, "Error en el entrenamiento", "red", download_weights_btn, download_training_data_btn, results_btn)
+        return
+    
     errores_totales.append(np.mean(errores_patrones))
     errores_patrones_registro.append(errores_patrones.copy().tolist())
 
@@ -760,7 +766,10 @@ def test_neural_network(test_data, normalize=True, output = True):
         
     # Obtener las funciones para la capa oculta (h) y la capa de salida
     funcion_h = np.vectorize(switch_function_output(funcion_h_nombre))
-    funcion_o = np.vectorize(switch_function_output(funcion_o_nombre))
+    funcion_o = np.vectorize(switch_function_output(funcion_o_nombre)) if funcion_o_nombre != "Softmax" else softmax_test
+
+    print("Probado con funcion oculta: ", funcion_h_nombre)
+    print("Probado con funcion salida: ", funcion_o_nombre)
 
     maximo_entrada = minimo_entrada = maximo_salida = minimo_salida = None
     # Normalizar las entradas y las salidas
@@ -783,7 +792,10 @@ def test_neural_network(test_data, normalize=True, output = True):
     
     if output:
         for i in range(len(salidas)):
-            errores_patrones[i] = 0.5 * np.sum((salidas[i] - Yk[i]) ** 2)
+            if funcion_o_nombre == "Softmax":
+                errores_patrones[i] = cross_entropy_error(salidas[i], Yk[i])
+            else:
+                errores_patrones[i] = 0.5 * np.sum((salidas[i] - Yk[i]) ** 2)
 
     # Desnormalizar si es necesario
     if normalize:
