@@ -9,7 +9,6 @@ import tkinter as tk
 from PIL import Image
 import json
 import threading
-import concurrent.futures
 import os
 # endregion
 
@@ -17,7 +16,7 @@ import os
 from utils import get_resource_path, open_link, download_json, load_json, save_json
 from backpropagation import backpropagation_training, test_neural_network, set_stop_training, get_graph_json, get_weights_json
 from graphics import plot_neural_network_with_labels, plot_error_total_by_epoch, plot_histograms
-from image_treatment import load_images, get_kernel, apply_kernel, download_images, resize_image, plain_image, normalize_image_vector, get_histogram_data
+from image_treatment import load_images, get_kernel, apply_kernel, download_images, resize_image, plain_image, normalize_image_vector, get_histogram_data, apply_transformations
 # endregion
 
 # region Variables
@@ -1813,7 +1812,6 @@ def image_treatment_frame_creation(frame):
     download_kernel_btn.configure(command= lambda: download_kernel_data())
     download_kernel_btn.configure(state = "disabled")
 
-
 def check_folder(folder_check):
     """
     Check if the user wants to load images from a folder
@@ -2108,35 +2106,9 @@ def apply_sel_kernel(kernel_name, stride=1, padding=0, percentaje = 0.5 , sub_in
         images_history.append(images)
 
     # initialize the filtered images with arrays
-    filtered_images = [[] for i in range(len(images))]
-
-    # Crear un pool de procesos
-    num_processes = os.cpu_count() 
-    with concurrent.futures.ProcessPoolExecutor(max_workers= num_processes) as executor:
-        # Enviar las tareas al pool de procesos, junto con el índice para asegurar el orden
-        futures = None
-        if type_data == "kernel":
-            futures = {executor.submit(apply_kernel, images[i], kernel, padding, stride, i): i for i in range(len(images))}
-        elif type_data == "color percentaje":
-            futures = {executor.submit(kernel, images[i], percentaje, i): i for i in range(len(images))}
-        elif type_data == "color modification":
-            futures = {executor.submit(kernel, images[i], i): i for i in range(len(images))}
-        elif type_data == "resize":
-            futures = {executor.submit(kernel, images[i], sub_info["width"], sub_info["height"], sub_info["interpolation"], i): i for i in range(len(images))}
-        elif type_data == "special function":
-            data = 0
-            data = sub_info["colormap"] if kernel_name == "apply_colormap" else data
-            data = sub_info["compression"] if kernel_name == "compress_image" else data
-            data = sub_info["umbral"] if kernel_name == "binarize_image" else data
-            data = sub_info["angle"] if kernel_name == "rotate_image" else data
-            futures = {executor.submit(kernel, images[i], data, i): i for i in range(len(images))}
-        # Recuperar los resultados en el orden original
-        for future in concurrent.futures.as_completed(futures):
-            index = futures[future]  # Recuperamos el índice de la imagen
-            filtered_images[index] = future.result()  # Asignamos el resultado en el índice correcto
+    filtered_images = apply_transformations(images, type_data=type_data, kernel_name=kernel_name ,kernel=kernel, stride=stride, padding=padding, percentaje=percentaje, sub_info=sub_info)    
     
-        update_show_images(next_images_btn, before_images_btn, actual_first_image)
-    
+    update_show_images(next_images_btn, before_images_btn, actual_first_image)
     image_treatment_btn_2.configure(state = "normal")
     download_images_btn.configure(state = "normal")
 
@@ -2777,30 +2749,8 @@ def apply_kernel_series(images, selected_kernel_series):
         show_treatment_info(kernel_json, len(images))
         
         main_window.update()
-        
-        num_process = os.cpu_count()
-        with concurrent.futures.ProcessPoolExecutor(max_workers= num_process) as executor:
-            # Enviar las tareas al pool de procesos, junto con el índice para asegurar el orden
-            futures = None
-            if type_data == "kernel":
-                futures = {executor.submit(apply_kernel, filtered_images[i], kernel, padding, stride, i): i for i in range(len(filtered_images))}
-            elif type_data == "color percentaje":
-                futures = {executor.submit(kernel, filtered_images[i], percentaje, i): i for i in range(len(filtered_images))}
-            elif type_data == "color modification":
-                futures = {executor.submit(kernel, filtered_images[i], i): i for i in range(len(filtered_images))}
-            elif type_data == "resize":
-                futures = {executor.submit(kernel, filtered_images[i], sub_info["width"], sub_info["height"], sub_info["interpolation"], i): i for i in range(len(filtered_images))}
-            elif type_data == "special function":
-                data = 0
-                data = sub_info["colormap"] if kernel_name == "apply_colormap" else data
-                data = sub_info["compression"] if kernel_name == "compress_image" else data
-                data = sub_info["umbral"] if kernel_name == "binarize_image" else data
-                data = sub_info["angle"] if kernel_name == "rotate_image" else data
-                futures = {executor.submit(kernel, filtered_images[i], data, i): i for i in range(len(filtered_images))}
-            # Recuperar los resultados en el orden original
-            for future in concurrent.futures.as_completed(futures):
-                index = futures[future]  # Recuperamos el índice de la imagen
-                filtered_images[index] = future.result()  # Asignamos el resultado en el índice correcto
+       
+        filtered_images = apply_transformations(images=filtered_images, type_data=type_data, kernel_name=kernel_name , kernel=kernel, stride=stride, padding=padding, percentaje=percentaje ,sub_info=sub_info)
                 
     return filtered_images
 

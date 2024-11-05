@@ -9,6 +9,7 @@ import os
 import numpy as np 
 import matplotlib.pyplot as plt
 from scipy.signal import correlate
+import concurrent.futures
 # endregion
 
 # region Image lecture and download
@@ -1000,3 +1001,34 @@ def binarize_image(image, threshold=128, index=0):
     print(f"Imagen {index} binarizada con umbral {threshold}")
     return binary_image
 # endregion
+
+def apply_transformations(images, type_data, kernel_name, kernel, stride, padding, percentaje, sub_info):
+    # Inicializar las imágenes filtradas con arrays vacíos
+    filtered_images = [[] for _ in range(len(images))]
+
+    # Crear un pool de hilos
+    num_threads = os.cpu_count()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+        # Enviar las tareas al pool de hilos, junto con el índice para asegurar el orden
+        futures = None
+        if type_data == "kernel":
+            futures = {executor.submit(apply_kernel, images[i], kernel, padding, stride, i): i for i in range(len(images))}
+        elif type_data == "color percentaje":
+            futures = {executor.submit(kernel, images[i], percentaje, i): i for i in range(len(images))}
+        elif type_data == "color modification":
+            futures = {executor.submit(kernel, images[i], i): i for i in range(len(images))}
+        elif type_data == "resize":
+            futures = {executor.submit(kernel, images[i], sub_info["width"], sub_info["height"], sub_info["interpolation"], i): i for i in range(len(images))}
+        elif type_data == "special function":
+            data = sub_info["colormap"] if kernel_name == "apply_colormap" else (
+                   sub_info["compression"] if kernel_name == "compress_image" else (
+                   sub_info["umbral"] if kernel_name == "binarize_image" else (
+                   sub_info["angle"] if kernel_name == "rotate_image" else 0)))
+            futures = {executor.submit(kernel, images[i], data, i): i for i in range(len(images))}
+        
+        # Recuperar los resultados en el orden original
+        for future in concurrent.futures.as_completed(futures):
+            index = futures[future]  # Recuperamos el índice de la imagen
+            filtered_images[index] = future.result()  # Asignamos el resultado en el índice correcto
+
+    return filtered_images
