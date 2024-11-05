@@ -2,6 +2,7 @@
 venv/
 build/
 dist/
+Train_Images_Resources/
 # Ignorar archivos de Python compilados
 __pycache__/
 *.pyc

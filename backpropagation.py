@@ -28,55 +28,57 @@ def get_graph_json():
 
 # region Activation functions and derivatives
 def sigmoid(x):
-    # Clip para evitar problemas numéricos
-    x = np.clip(x, -100, 100)
+    x = np.clip(x, -100, 100)  # Evita overflow
     return 1 / (1 + np.exp(-x))
 
 def sigmoid_derivative(x):
-    return sigmoid(x) * (1 - sigmoid(x))
+    sig = sigmoid(x)
+    return sig * (1 - sig)
 
 def tanh(x):
-    return math.tanh(x)
+    return np.tanh(x)  # np.tanh es vectorizada de manera nativa
 
 def tanh_derivative(x):
-    return 1 - math.tanh(x)**2
+    return 1 - np.tanh(x) ** 2
 
+# Relu
 def relu(x):
-    return max(0, x)
+    return np.maximum(0, x)  # `np.maximum` está vectorizada para matrices
 
 def relu_derivative(x):
-    return 1 if x > 0 else 0
+    return (x > 0).astype(float)  # Devuelve 1 para valores positivos, 0 para negativos
 
+# Leaky Relu
 def leaky_relu(x, alpha=0.01):
-    return x if x > 0 else alpha * x
+    return np.where(x > 0, x, alpha * x)  # `np.where` está optimizada y aplica condicionales de manera vectorizada
 
 def leaky_relu_derivative(x, alpha=0.01):
-    return 1 if x > 0 else alpha
+    return np.where(x > 0, 1, alpha)
 
+# Linear
 def linear(x):
-    return x
+    return x  # `x` ya es un array; no es necesario transformarlo
 
 def linear_derivative(x):
-    return 1
+    return np.ones_like(x)  # La derivada de `f(x) = x` es 1 para todos los elementos
 
+# Softplus
 def softplus(x):
-    # Clip para evitar problemas numéricos
-    x = np.clip(x, -100, 100)
-    return np.log(1 + np.exp(x))
-
+    x = np.clip(x, -100, 100)  # Clip para evitar problemas numéricos
+    return np.log1p(np.exp(x))  # `np.log1p` es más preciso para valores pequeños
 
 def softplus_derivative(x):
-    # Limitar el valor de x para evitar problemas con valores extremadamente grandes o pequeños
     x_clipped = np.clip(x, -100, 100)
-    return 1 / (1 + math.exp(-x_clipped))
+    return 1 / (1 + np.exp(-x_clipped))  # `np.exp` y operaciones aritméticas están optimizadas
 
-
+# ELU
 def elu(x, alpha=1.0):
-    return x if x > 0 else alpha * (math.exp(x) - 1)
+    return np.where(x > 0, x, alpha * (np.exp(x) - 1))
 
 def elu_derivative(x, alpha=1.0):
-    return 1 if x > 0 else alpha * math.exp(x)
+    return np.where(x > 0, 1, alpha * np.exp(x))
 
+# Swish
 def swish(x):
     return x * sigmoid(x)
 
@@ -84,6 +86,10 @@ def swish_derivative(x):
     sigmoid_x = sigmoid(x)
     return sigmoid_x + x * sigmoid_x * (1 - sigmoid_x)
 
+# Sigmoid for swish
+def sigmoid(x):
+    x = np.clip(x, -100, 100)
+    return 1 / (1 + np.exp(-x))
 def softmax(x):
     # Para estabilidad numérica, resta el máximo de x antes de la exponenciación
     x = np.clip(x, -100, 100)
@@ -601,10 +607,10 @@ def backpropagation_training(train_data=None, errors_text=None, status_label=Non
     salidas_d = np.array(train_data["outputs"])
 
     # Obtener las funciones de activación y sus derivadas
-    funcion_h = np.vectorize(switch_function_output(funcion_h_nombre))
-    funcion_o = np.vectorize(switch_function_output(funcion_o_nombre)) if funcion_o_nombre != "Softmax" else softmax
-    funcion_h_derivada = np.vectorize(switch_function_output(funcion_h_nombre, True))
-    funcion_o_derivada = np.vectorize(switch_function_output(funcion_o_nombre, True))
+    funcion_h = switch_function_output(funcion_h_nombre)
+    funcion_o = switch_function_output(funcion_o_nombre) if funcion_o_nombre != "Softmax" else softmax
+    funcion_h_derivada = switch_function_output(funcion_h_nombre, True)
+    funcion_o_derivada = switch_function_output(funcion_o_nombre, True)
 
     # Normalizar entradas y salidas si es necesario
     if normalize:
@@ -636,6 +642,7 @@ def backpropagation_training(train_data=None, errors_text=None, status_label=Non
 
     try:
         while np.any(errores_patrones > precision):
+            print("Epoca Iniciada : ", epoca)
             if epoca % 10 == 0:
                 error_total = np.mean(errores_patrones)
                 errores_totales.append(error_total)

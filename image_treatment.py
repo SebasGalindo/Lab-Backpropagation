@@ -8,6 +8,7 @@ from tkinter import filedialog # Import the filedialog module to open file dialo
 import os
 import numpy as np 
 import matplotlib.pyplot as plt
+from scipy.signal import correlate
 # endregion
 
 # region Image lecture and download
@@ -28,14 +29,17 @@ def load_images(is_folder):
             folder = get_resource_path(folder)
             if folder:
                 for filename in os.listdir(folder):
-                    img_path = os.path.join(folder, filename)
-                    img = cv2.imread(img_path)
-                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  
-                    if img is not None:
-                        images.append(img)
+                    try:
+                        img_path = os.path.join(folder, filename)
+                        img = cv2.imread(img_path)
+                        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  
+                        if img is not None:
+                            print("Image with path: ", img_path, " loaded")
+                            images.append(img)
+                    except Exception as e:
+                        print("Error loading image: ", e)
         else:
-            img_path = filedialog.askopenfilename(filetypes=[("Image files", "*.png;*.jpg;*.jpeg;*.bmp;*.ppm;*.pgm;*.pbm;*.webp")]
-)
+            img_path = filedialog.askopenfilename(filetypes=[("Image files", "*.png;*.jpg;*.jpeg;*.bmp;*.ppm;*.pgm;*.pbm;*.webp")])
             if img_path:
                 img = cv2.imread(img_path)
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  
@@ -150,7 +154,7 @@ def apply_kernel_normal(image, kernel, padding=0, stride=1):
 
     return output_image_array  # Devolver la imagen convertida en formato array
 
-def apply_kernel(image, kernel, padding=0, stride=1, index=0):
+def apply_kernel_numpy(image, kernel, padding=0, stride=1, index=0):
     """
     Aplica un kernel sobre una imagen con padding y stride definidos utilizando numpy.
     
@@ -203,6 +207,101 @@ def apply_kernel(image, kernel, padding=0, stride=1, index=0):
     output_image = np.clip(output_image, 0, 255).astype(np.uint8)
 
     print(f"Kernel aplicado a la imagen {index} correctamente")
+    return output_image
+
+def apply_kernel_numpy2(image, kernel, padding=0, stride=1, index=0):
+    """
+    Applies a kernel over an image using numpy only, with defined padding and stride.
+    
+    Args:
+        image: Input image in BGR format (numpy array).
+        kernel: The kernel (matrix) of variable size (3x3, 5x5, etc.).
+        padding: Amount of padding to add to the image.
+        stride: Number of pixels to move after applying the kernel.
+        index: Image index (for tracking in logs).
+        
+    Returns:
+        The convolved image, compatible with Image.fromarray().
+    """
+    
+    print(f"Applying kernel to image {index} using numpy...")
+    
+    # Ensure kernel is a numpy array
+    if isinstance(kernel, list):
+        kernel = np.array(kernel, dtype=np.float32)
+    
+    # Dimensions of the image and kernel
+    image_height, image_width, _ = image.shape
+    kernel_size = kernel.shape[0]  # Assuming a square kernel
+
+    # Flip kernel for convolution
+    kernel_flipped = np.flip(kernel)
+    
+    # Apply padding to the image if necessary
+    if padding > 0:
+        padded_image = np.pad(image, ((padding, padding), (padding, padding), (0, 0)), mode='constant', constant_values=0)
+    else:
+        padded_image = image
+
+    # Calculate output dimensions
+    output_height = (padded_image.shape[0] - kernel_size) // stride + 1
+    output_width = (padded_image.shape[1] - kernel_size) // stride + 1
+
+    # Initialize output image
+    output_image = np.zeros((output_height, output_width, 3), dtype=np.float32)
+
+    # Perform convolution manually using numpy for each channel
+    for y in range(0, output_height):
+        for x in range(0, output_width):
+            # Define region of interest
+            region = padded_image[y*stride:y*stride+kernel_size, x*stride:x*stride+kernel_size]
+            
+            # Apply the kernel to each channel (BGR)
+            for c in range(3):  # Iterate over channels BGR
+                output_image[y, x, c] = np.sum(region[:, :, c] * kernel_flipped)
+
+    # Clip the result to keep it within [0, 255]
+    output_image = np.clip(output_image, 0, 255).astype(np.uint8)
+
+    print(f"Numpy-based kernel applied to image {index} successfully")
+    return output_image
+
+def apply_kernel(image, kernel, padding=0, stride=1, index=0):
+    """
+    Applies a kernel over an image using scipy's correlate, with defined padding and stride.
+
+    Args:
+        image: Input image in BGR format (numpy array).
+        kernel: The kernel (matrix) of variable size (3x3, 5x5, etc.).
+        padding: Amount of padding to add to the image.
+        stride: Number of pixels to move after applying the kernel.
+        index: Image index (for tracking in logs).
+
+    Returns:
+        The convolved image, compatible with Image.fromarray().
+    """
+    print(f"Applying precise kernel to image {index} using scipy.signal.correlate...")
+
+    # Ensure kernel is a numpy array with float32 type for precision
+    kernel = np.array(kernel, dtype=np.float32)
+
+    # Apply padding to the image if necessary
+    if padding > 0:
+        image = np.pad(image, ((padding, padding), (padding, padding), (0, 0)), mode='constant', constant_values=0)
+
+    # Initialize an empty output array
+    output_height = (image.shape[0] - kernel.shape[0]) // stride + 1
+    output_width = (image.shape[1] - kernel.shape[1]) // stride + 1
+    output_image = np.zeros((output_height, output_width, 3), dtype=np.float32)
+
+    # Apply the convolution precisely using correlate on each channel
+    for c in range(3):
+        output_image[:, :, c] = correlate(image[:, :, c], kernel, mode='valid')[::stride, ::stride]
+
+    # Clip values to ensure they stay within the valid [0, 255] range for images
+    output_image = np.clip(output_image, 0, 255).astype(np.uint8)
+
+    print(f"Precise kernel applied to image {index} successfully")
     return output_image
 
 def get_kernel(name = 'rgb_to_bgr', p = 0):

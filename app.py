@@ -108,7 +108,7 @@ kernel_names = [
     "more_blue",
     ]
 kernel_history, kernel_data = [], {}
-kernel_series = ["Pez Cirujano","Trucha Arcoíris"]
+kernel_series = ["Pomacantus","Trucha Arcoíris", "Cirujano Amarillo", "Cirujano Azul"]
 selected_kernel_series = None
 actual_tags = []
 images_history = []
@@ -122,7 +122,7 @@ image_frame = None
 image_status_lbl, txt_categories = None, None
 image_frame, treated_image_frame, categories_frame = None, None, None
 test_image, test_filtered_image = None, None
-test_categories, default_test_categories = [], ["Pez Cirujano","Trucha Arcoíris" ]
+test_categories, default_test_categories = [], ["Trucha Arcoíris","Pez Cirujano"]
 weights_status_lbl, load_weights_btn, result_lbl = None, None, None
 width_entry, height_entry, interpolation_combobox = None, None, None
 
@@ -679,11 +679,13 @@ def train_frame_creation(master = None, num_excercise = 0, row = 8, is_for_image
     
     inputs, outputs = [], []
     
-    if is_for_image: 
-        label_categories = set()
+    if is_for_image:
+        label_categories = []  # Usamos una lista en lugar de un conjunto
         
         for category in train_images_data:
-            label_categories.add(category["label"])
+            label = category["label"]
+            if label not in label_categories:
+                label_categories.append(label)  # Mantener el orden de ingreso
         
         for category in train_images_data:
             status_c = category["status"]
@@ -696,9 +698,10 @@ def train_frame_creation(master = None, num_excercise = 0, row = 8, is_for_image
                 
                 for i in range(len(n_images)):
                     inputs.append(n_images[i])
-                    # append the output in a softmax way
+                    
+                    # Creamos el vector de salida con el índice en label_categories
                     output = [0 for _ in range(len(label_categories))]
-                    output[list(label_categories).index(label)] = 1
+                    output[label_categories.index(label)] = 1
                     outputs.append(output)
 
         data_train_json = {
@@ -706,11 +709,18 @@ def train_frame_creation(master = None, num_excercise = 0, row = 8, is_for_image
             "outputs": outputs
         }
         
-        # print the labels categories + its softmax output
-        unique_outputs = set(tuple(i) for i in outputs)
+        # Lista para mantener el orden de unique_outputs
+        unique_outputs = []
+        for output in outputs:
+            if output not in unique_outputs:
+                unique_outputs.append(output)
+        
+        # Imprimir las etiquetas y sus salidas softmax en el orden de ingreso
         for i in range(len(label_categories)):
-            print(f"Label: {list(label_categories)[i]} -> Output: {list(unique_outputs)[i]}")
+            print(f"Label: {label_categories[i]} -> Output: {unique_outputs[i]}")
+        
         errors_text = create_training_process_frame(train_frame, len(inputs))
+
 
 def changue_status_training(status_label, text, color, download_weights_btn, download_training_data_btn, results_btn):
     """
@@ -998,7 +1008,6 @@ def start_training(status, status2, bias_entry, alpha_entry, betha_entry, precis
         print("Data for images")
         temp_train_data = train_data.copy()
         temp_train_data["inputs"] = "Images"
-        print(json.dumps(temp_train_data, indent=2))
     
     # Start the training process
     normalize = False if is_for_image else True
@@ -1394,14 +1403,14 @@ def add_results_info(frame, test_data, row, num_excercise=0, is_for_image = Fals
 
         if is_for_image:
             try:
-                output_round = round(output[0])
-                output_label = label_list[output_round]
+                output_index = output.index(1)
+                output_label = label_list[output_index]
             except ValueError:
                 output_label = "Desconocido"
                 
             try:
-                result_round = round(results[i][0])
-                result_label = label_list[result_round]
+                result_index = results[i].index(max(results[i]))
+                result_label = label_list[result_index]
             except ValueError:
                 result_label = "Desconocido"
 
@@ -1608,7 +1617,7 @@ def image_treatment_frame_creation(frame):
     frame: Frame where the image treatment frame will be created
     """
     global is_folder_img, kernel_names, apply_kernel_btn, remove_kernel_btn,image_treatment_btn_2, filtered_images,download_images_btn,\
-        download_kernel_btn, resize_images_btn
+        download_kernel_btn, resize_images_btn, before_images_btn, next_images_btn
 
     image_treatment_frame = ctk.CTkScrollableFrame(master=frame, corner_radius=0, fg_color=GUI_ELEMENTS["colors"]["background"],scrollbar_button_color="#112f16", scrollbar_button_hover_color="#446249")
     image_treatment_frame.grid(row=0, column=2, sticky="nsew", columnspan=12, rowspan=12)
@@ -1766,25 +1775,44 @@ def image_treatment_frame_creation(frame):
     binarize_btn.grid(row=1, column=8, pady=10, sticky="wn", columnspan=2)
     binarize_btn.configure(command= lambda: binarize_images(umbral_entry.get()))
     
+    # Frame for the buttons to next and before images
+    images_buttons_frame = ctk.CTkFrame(master=image_treatment_frame, corner_radius=8, fg_color=GUI_ELEMENTS["colors"]["background"])
+    images_buttons_frame.grid(row=5, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
+    images_buttons_frame = grid_setup(images_buttons_frame)
+    
+    next_images_btn = ctk.CTkButton(master=images_buttons_frame, text=">", fg_color=GUI_ELEMENTS["colors"]["foreground"], width=80, height=40, font=GUI_ELEMENTS["fonts"]["button_font"], hover_color=GUI_ELEMENTS["colors"]["hover_button"], text_color="#0F1010")
+    next_images_btn.grid(row=0, column=6, sticky="nw", padx=2, columnspan = 6)
+    next_images_btn.configure(command= lambda: update_show_images(next_images_btn, before_images_btn, actual_first_image+10))
+    
+    before_images_btn = ctk.CTkButton(master=images_buttons_frame, text="<", fg_color=GUI_ELEMENTS["colors"]["foreground"], width=80, height=40, font=GUI_ELEMENTS["fonts"]["button_font"], hover_color=GUI_ELEMENTS["colors"]["hover_button"], text_color="#0F1010")
+    before_images_btn.grid(row=0, column=0, sticky="ne", padx=0, columnspan = 6)
+    before_images_btn.configure(command= lambda: update_show_images(next_images_btn, before_images_btn, actual_first_image-10))
+    
+    # Frame for download images and kernel data
+    download_frame = ctk.CTkFrame(master=image_treatment_frame, corner_radius=8, fg_color=GUI_ELEMENTS["colors"]["background"])
+    download_frame.grid(row=7, column=0, sticky="nsew", columnspan=12, pady=10, padx=10)
+    download_frame = grid_setup(download_frame)
+    
     # Ctk label for the tag of the images
-    tag_lbl = ctk.CTkLabel(master=image_treatment_frame, text="Etiqueta:", font=("Arial", 16, "bold"), text_color=GUI_ELEMENTS["colors"]["foreground"])
-    tag_lbl.grid(row=6, column=0, pady=10, padx=15, sticky="swen", columnspan=1)
+    tag_lbl = ctk.CTkLabel(master=download_frame, text="Etiqueta:", font=("Arial", 16, "bold"), text_color=GUI_ELEMENTS["colors"]["foreground"])
+    tag_lbl.grid(row=0, column=0, pady=10, padx=15, sticky="swen", columnspan=1)
     
     # Ctk entry for the tag of the images
-    tag_entry = ctk.CTkEntry(master=image_treatment_frame, width=160, font=GUI_ELEMENTS["fonts"]["button_font"])
-    tag_entry.grid(row=6, column=1, pady=10, padx = 10, sticky="swen", columnspan=3)
+    tag_entry = ctk.CTkEntry(master=download_frame, width=160, font=GUI_ELEMENTS["fonts"]["button_font"])
+    tag_entry.grid(row=0, column=1, pady=10, padx = 10, sticky="swen", columnspan=3)
     
     # Button for download images
-    download_images_btn = ctk.CTkButton(master=image_treatment_frame, text="Descargar Imágenes", fg_color=GUI_ELEMENTS["colors"]["foreground"], width=180, height=40, font=GUI_ELEMENTS["fonts"]["button_font"], hover_color=GUI_ELEMENTS["colors"]["hover_button"], text_color="#0F1010")
-    download_images_btn.grid(row=6, column=4, pady=10, sticky="wn", columnspan=2)
+    download_images_btn = ctk.CTkButton(master=download_frame, text="Descargar Imágenes", fg_color=GUI_ELEMENTS["colors"]["foreground"], width=180, height=40, font=GUI_ELEMENTS["fonts"]["button_font"], hover_color=GUI_ELEMENTS["colors"]["hover_button"], text_color="#0F1010")
+    download_images_btn.grid(row=0, column=4, pady=10, sticky="wn", columnspan=2)
     download_images_btn.configure(command= lambda: download_images(tag_entry.get(), filtered_images))
     download_images_btn.configure(state = "disabled")
     
     # Button for download kernel used
-    download_kernel_btn = ctk.CTkButton(master=image_treatment_frame, text="Descargar Registro de Kernels", fg_color=GUI_ELEMENTS["colors"]["foreground"], width=180, height=40, font=GUI_ELEMENTS["fonts"]["button_font"], hover_color=GUI_ELEMENTS["colors"]["hover_button"], text_color="#0F1010")
-    download_kernel_btn.grid(row=6, column=6, pady=10, sticky="wn", columnspan=3)
+    download_kernel_btn = ctk.CTkButton(master=download_frame, text="Descargar Registro de Kernels", fg_color=GUI_ELEMENTS["colors"]["foreground"], width=180, height=40, font=GUI_ELEMENTS["fonts"]["button_font"], hover_color=GUI_ELEMENTS["colors"]["hover_button"], text_color="#0F1010")
+    download_kernel_btn.grid(row=0, column=6, pady=10, sticky="wn", columnspan=3)
     download_kernel_btn.configure(command= lambda: download_kernel_data())
     download_kernel_btn.configure(state = "disabled")
+
 
 def check_folder(folder_check):
     """
@@ -1896,7 +1924,7 @@ def create_images_frame(frame, images, col=0, is_filtered=False):
     global images_labels, actual_first_image, filtered_images_labels, next_images_btn, before_images_btn, filtered_images, image_frame
 
     main_frame = ctk.CTkScrollableFrame(master=frame, corner_radius=8, fg_color="#ffffff", width=600 ,height=600, orientation="vertical")
-    main_frame.grid(row=5, column=col, sticky="nsw", columnspan=6, pady=10, padx=10)
+    main_frame.grid(row=6, column=col, sticky="nsw", columnspan=6, pady=10, padx=10)
     main_frame = grid_setup(main_frame)
 
     image_frame = ctk.CTkScrollableFrame(master=main_frame, corner_radius=8, fg_color="#ffffff", orientation="horizontal")
@@ -1909,7 +1937,7 @@ def create_images_frame(frame, images, col=0, is_filtered=False):
     
     last_image = 10 if len(images) > 10 else len(images)
     actual_first_image = 0
-    j= 1
+    j= 0
     num_images_resized = ""
     height_total = 0
     for i in range(actual_first_image, last_image):
@@ -1917,21 +1945,13 @@ def create_images_frame(frame, images, col=0, is_filtered=False):
         photo = ctk.CTkImage(dark_image=image, light_image=image,size=(images[i].shape[1], images[i].shape[0]))
         height_total += images[i].shape[0]
         label = ctk.CTkLabel(master=image_frame, image=photo, text="", compound="center")
-        label.grid(row=j, column=0, sticky="nsew", pady=5, columnspan=12)
+        label.grid(row=j, column=0, sticky="new", pady=5, columnspan=12)
         if is_filtered:
             filtered_images_labels.append(label)
         else:
             images_labels.append(label)
         j += 1
     
-    next_images_btn = ctk.CTkButton(master=image_frame, text=">", fg_color=GUI_ELEMENTS["colors"]["foreground"], width=80, height=40, font=GUI_ELEMENTS["fonts"]["button_font"], hover_color=GUI_ELEMENTS["colors"]["hover_button"], text_color="#0F1010")
-    next_images_btn.grid(row=0, column=1, sticky="nsew", padx=2)
-    next_images_btn.configure(command= lambda: update_show_images(next_images_btn, before_images_btn, actual_first_image+10))
-    
-    before_images_btn = ctk.CTkButton(master=image_frame, text="<", fg_color=GUI_ELEMENTS["colors"]["foreground"], width=80, height=40, font=GUI_ELEMENTS["fonts"]["button_font"], hover_color=GUI_ELEMENTS["colors"]["hover_button"], text_color="#0F1010")
-    before_images_btn.grid(row=0, column=0, sticky="nsew", padx=0)
-    before_images_btn.configure(command= lambda: update_show_images(next_images_btn, before_images_btn, actual_first_image-10))
-
     height_total += 100
     image_frame.configure(height=height_total)
     
@@ -2091,7 +2111,7 @@ def apply_sel_kernel(kernel_name, stride=1, padding=0, percentaje = 0.5 , sub_in
     filtered_images = [[] for i in range(len(images))]
 
     # Crear un pool de procesos
-    num_processes = os.cpu_count() * 2
+    num_processes = os.cpu_count() 
     with concurrent.futures.ProcessPoolExecutor(max_workers= num_processes) as executor:
         # Enviar las tareas al pool de procesos, junto con el índice para asegurar el orden
         futures = None
@@ -2157,8 +2177,6 @@ def download_kernel_data():
     if len(kernel_history) == 0:
         print("No kernels to download")
         return
-    
-    kernel_history.append(kernel_data)
     
     kernels_json = {
         "kernels": kernel_history
@@ -2551,8 +2569,6 @@ def load_images_category(tag_name):
         "status": "loaded"
     }
     
-    print("Category data: ", category_data)
-    
     train_images_data.append(category_data)
     
     if txt_initial_train_images is None:
@@ -2597,8 +2613,10 @@ def select_kernel_series(kernel_series):
         status_kernel_lbl.configure(text="Debe seleccionar una serie de kernels", text_color="red")
         return
     
-    filename = "cirujano_kernels" if kernel_series == "Pez Cirujano" else None
-    filename = "trucha_kernels" if kernel_series == "Trucha Arcoíris" else filename 
+    filename = "cirujano_kernels" if kernel_series == "Pomacantus" else None
+    filename = "trucha_kernels" if kernel_series == "Trucha Arcoíris" else filename
+    filename = "amarillo_kernels" if kernel_series == "Cirujano Amarillo" else filename
+    filename = "azul_kernels" if kernel_series == "Cirujano Azul" else filename
     selected_kernel_series = load_json(filename=f"kernels_series/{filename}")
     
     try:
@@ -2760,7 +2778,7 @@ def apply_kernel_series(images, selected_kernel_series):
         
         main_window.update()
         
-        num_process = os.cpu_count() * 2
+        num_process = os.cpu_count()
         with concurrent.futures.ProcessPoolExecutor(max_workers= num_process) as executor:
             # Enviar las tareas al pool de procesos, junto con el índice para asegurar el orden
             futures = None
@@ -2916,8 +2934,10 @@ def test_image_frame_creation(master):
     """
     global data_test_json, weights_test_json, num_excercise, data_train_json, image_frame, treated_image_frame, image_status_lbl, \
         categories_frame, kernel_combobox, load_kernel_btn, pre_treated_check, status_kernel_lbl, weights_status_lbl, load_weights_btn, \
-        result_lbl
-        
+        result_lbl, test_categories
+    
+    test_categories = []    
+    
     test_frame = ctk.CTkScrollableFrame(master=master, corner_radius=0, fg_color=GUI_ELEMENTS["colors"]["background"],scrollbar_button_color="#112f16", scrollbar_button_hover_color="#446249")
     test_frame.grid(row=0, column=2, sticky="nsew", columnspan=12, rowspan=12)
     test_frame = grid_setup(test_frame)
@@ -3384,6 +3404,8 @@ def start_image_test():
     
     result_index = results[0].index(max(results[0]))
     result_category = test_categories[result_index]
+    if max(results[0]) < 0.7:
+        result_category = "Desconocido"
     result_lbl.configure(text=f"Resultado: {results[0]} = {result_category}")
 # endregion
 
